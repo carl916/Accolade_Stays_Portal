@@ -7,15 +7,21 @@ type FormSubmitButtonProps = {
   children: ReactNode;
   pendingLabel?: string;
   className?: string;
+  disabled?: boolean;
 };
 
-export function FormSubmitButton({ children, pendingLabel = "Saving...", className = "" }: FormSubmitButtonProps) {
+export function FormSubmitButton({
+  children,
+  pendingLabel = "Saving...",
+  className = "",
+  disabled = false
+}: FormSubmitButtonProps) {
   const { pending } = useFormStatus();
 
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className={`min-h-11 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {pending ? pendingLabel : children}

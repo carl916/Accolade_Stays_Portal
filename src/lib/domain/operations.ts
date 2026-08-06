@@ -16,6 +16,8 @@ export const cleaningTypes = ["standard_changeover", "mid_stay_clean", "deep_or_
 
 export const physicalBedTypes = ["zip_and_link", "fixed_double", "fixed_single", "other"] as const;
 
+export const bedroomSetupPhysicalBedTypes = ["zip_and_link", "fixed_double"] as const;
+
 export const bedConfigurations = [
   "king",
   "double",
@@ -25,6 +27,10 @@ export const bedConfigurations = [
   "other",
   "unknown"
 ] as const;
+
+export const bedroomSetupBedConfigurations = ["king", "double", "two_singles"] as const;
+
+export const zipAndLinkBedConfigurations = ["king", "two_singles"] as const;
 
 export const longCleanReasons = [
   "property_exceptionally_dirty",
@@ -43,14 +49,18 @@ export type AppRole = (typeof appRoles)[number];
 export type CleaningJobStatus = (typeof cleaningJobStatuses)[number];
 export type CleaningType = (typeof cleaningTypes)[number];
 export type PhysicalBedType = (typeof physicalBedTypes)[number];
+export type BedroomSetupPhysicalBedType = (typeof bedroomSetupPhysicalBedTypes)[number];
 export type BedConfiguration = (typeof bedConfigurations)[number];
+export type BedroomSetupBedConfiguration = (typeof bedroomSetupBedConfigurations)[number];
 export type LongCleanReason = (typeof longCleanReasons)[number];
 
 export const appRoleSchema = z.enum(appRoles);
 export const cleaningJobStatusSchema = z.enum(cleaningJobStatuses);
 export const cleaningTypeSchema = z.enum(cleaningTypes);
 export const physicalBedTypeSchema = z.enum(physicalBedTypes);
+export const bedroomSetupPhysicalBedTypeSchema = z.enum(bedroomSetupPhysicalBedTypes);
 export const bedConfigurationSchema = z.enum(bedConfigurations);
+export const bedroomSetupBedConfigurationSchema = z.enum(bedroomSetupBedConfigurations);
 export const longCleanReasonSchema = z.enum(longCleanReasons);
 
 export const initialPropertyNames = ["St Andrews", "Brahms", "Rossini"] as const;
@@ -148,7 +158,7 @@ export function formatBedConfiguration(configuration: BedConfiguration) {
   const labels = {
     king: "King",
     double: "Double",
-    two_singles: "Two singles",
+    two_singles: "Twin",
     single: "Single",
     unmade: "Unmade",
     other: "Other",

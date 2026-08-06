@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { bedConfigurations, physicalBedTypes } from "@/lib/domain/operations";
+import {
+  bedroomSetupBedConfigurations,
+  bedroomSetupPhysicalBedTypes,
+  zipAndLinkBedConfigurations
+} from "@/lib/domain/operations";
 import { requireRole } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
@@ -38,12 +42,35 @@ const bedroomSchema = z
     propertyId: z.string().uuid(),
     bedroomId: z.string().uuid().optional(),
     name: z.string().trim().min(1, "Bedroom name is required."),
-    physicalBedType: z.enum(physicalBedTypes),
-    defaultConfiguration: z.enum(bedConfigurations),
-    currentConfiguration: z.enum(bedConfigurations),
-    permittedConfigurations: z.array(z.enum(bedConfigurations)).min(1),
+    physicalBedType: z.enum(bedroomSetupPhysicalBedTypes),
+    defaultConfiguration: z.enum(bedroomSetupBedConfigurations),
+    currentConfiguration: z.enum(bedroomSetupBedConfigurations),
+    permittedConfigurations: z.array(z.enum(bedroomSetupBedConfigurations)).min(1),
     isActive: z.coerce.boolean().default(false)
   })
+  .transform((value) => {
+    if (value.physicalBedType === "fixed_double") {
+      return {
+        ...value,
+        defaultConfiguration: "double" as const,
+        currentConfiguration: "double" as const,
+        permittedConfigurations: ["double" as const]
+      };
+    }
+
+    return value;
+  })
+  .refine(
+    (value) =>
+      value.physicalBedType !== "zip_and_link" ||
+      value.permittedConfigurations.every((configuration) =>
+        (zipAndLinkBedConfigurations as readonly string[]).includes(configuration)
+      ),
+    {
+      message: "Zip-and-link bedrooms can only permit King or Twin.",
+      path: ["permittedConfigurations"]
+    }
+  )
   .refine((value) => value.permittedConfigurations.includes(value.defaultConfiguration), {
     message: "Default configuration must be permitted.",
     path: ["defaultConfiguration"]

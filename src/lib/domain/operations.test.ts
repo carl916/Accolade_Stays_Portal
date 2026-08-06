@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  bedroomSetupBedConfigurations,
+  bedroomSetupPhysicalBedTypes,
   canCleanerAccessJob,
   canManageOperations,
   canManageSettings,
   canTransitionCleaningJobStatus,
   cleaningTypes,
+  formatBedConfiguration,
   getBedConfigurationAction,
   getRoleHomePath,
   initialLinenItemNames,
@@ -93,6 +96,12 @@ describe("operations domain rules", () => {
     expect(getBedConfigurationAction({ currentConfiguration: "unknown", requiredConfiguration: "double" })).toBe(
       "Confirm current setup, then configure as Double"
     );
+  });
+
+  it("limits bedroom setup options to the simplified property workflow", () => {
+    expect(bedroomSetupPhysicalBedTypes).toEqual(["zip_and_link", "fixed_double"]);
+    expect(bedroomSetupBedConfigurations).toEqual(["king", "double", "two_singles"]);
+    expect(formatBedConfiguration("two_singles")).toBe("Twin");
   });
 
   it("keeps the initial property list aligned with the product brief", () => {
