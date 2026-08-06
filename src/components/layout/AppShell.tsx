@@ -1,19 +1,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { signOut } from "@/lib/auth/actions";
+import { getRoleHomePath } from "@/lib/domain/operations";
+import type { AuthProfile } from "@/lib/auth/session";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
-
-const navItems = [
-  { href: "/admin", label: "Admin" },
-  { href: "/manager", label: "Manager" },
-  { href: "/cleaner", label: "Cleaner" },
-  { href: "/login", label: "Login" }
-];
 
 type AppShellProps = {
   children: ReactNode;
+  profile: AuthProfile | null;
 };
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, profile }: AppShellProps) {
   return (
     <div className="flex min-h-screen flex-col">
       <EnvironmentBanner />
@@ -23,15 +20,34 @@ export function AppShell({ children }: AppShellProps) {
             Accolade Stays
           </Link>
           <nav aria-label="Primary navigation" className="flex flex-wrap gap-2">
-            {navItems.map((item) => (
+            {profile ? (
+              <>
+                <Link
+                  href={getRoleHomePath(profile.role)}
+                  className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
+                >
+                  Dashboard
+                </Link>
+                <span className="hidden items-center px-2 py-2 text-sm text-stone-600 sm:inline-flex">
+                  {profile.full_name}
+                </span>
+                <form action={signOut}>
+                  <button
+                    type="submit"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </>
+            ) : (
               <Link
-                key={item.href}
-                href={item.href}
+                href="/login"
                 className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
               >
-                {item.label}
+                Login
               </Link>
-            ))}
+            )}
           </nav>
         </div>
       </header>

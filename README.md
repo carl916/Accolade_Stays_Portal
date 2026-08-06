@@ -33,8 +33,26 @@ Mobile-first operations portal for Accolade Stays cleaning coordination.
 - `npm run typecheck`: Run TypeScript without emitting files.
 - `npm run test`: Run the Vitest test suite.
 
+## Database Setup
+
+Database changes live in `supabase/migrations`.
+
+Apply migrations to staging first, verify the app, then apply the same migration set to production. The initial schema creates the core operations tables, enables Row Level Security on every table, seeds the three initial properties, and records audit events whenever a cleaning job status is created or changed.
+
+The first administrator profile must be bootstrapped through a trusted server-side process or the Supabase dashboard. After that, administrators can manage user roles through the application workflows that will be added later.
+
+## Authentication
+
+The login flow uses Supabase email/password authentication. A user must exist in Supabase Auth and have a matching active row in `public.profiles` before they can access the portal.
+
+Role routing sends users to:
+
+- `administrator`: `/admin`
+- `cleaning_manager`: `/manager`
+- `cleaner`: `/cleaner`
+
 ## Deployment Approach
 
 Deploy as a standard Next.js App Router application. Configure the environment variables in the hosting platform, use `NEXT_PUBLIC_APP_ENV=Production` for the production environment, and keep `SUPABASE_SERVICE_ROLE_KEY` restricted to server-side runtime configuration only.
 
-Database schema and Supabase Row Level Security policies will be added later through SQL migrations in `supabase/migrations`.
+Apply database migrations before deploying application features that depend on new tables or policies.

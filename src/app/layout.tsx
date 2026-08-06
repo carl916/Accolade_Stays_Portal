@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { getCurrentProfile } from "@/lib/auth/session";
 import "./globals.css";
 
 const inter = Inter({
@@ -18,11 +19,13 @@ type RootLayoutProps = {
   children: ReactNode;
 };
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({ children }: RootLayoutProps) {
+  const profile = await getCurrentProfile();
+
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AppShell>{children}</AppShell>
+        <AppShell profile={profile}>{children}</AppShell>
       </body>
     </html>
   );
