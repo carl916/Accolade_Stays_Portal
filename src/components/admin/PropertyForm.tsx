@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { createProperty, updateProperty } from "@/lib/admin/property-actions";
+import {
+  formatCleaningDurationForPropertyDetail,
+  formatCleaningDurationOption,
+  isSupportedCleaningDuration,
+  supportedCleaningDurations
+} from "@/lib/domain/operations";
 import type { Database } from "@/lib/supabase/types";
 import { FormSubmitButton } from "./FormSubmitButton";
 
@@ -27,6 +33,8 @@ type PropertyFormProps = {
 export function PropertyForm({ property, onCancel }: PropertyFormProps) {
   const [isDirty, setIsDirty] = useState(false);
   const isEditing = Boolean(property);
+  const durationValue = property?.default_cleaning_duration_minutes ?? 180;
+  const hasSupportedDuration = isSupportedCleaningDuration(durationValue);
 
   return (
     <form
@@ -47,16 +55,28 @@ export function PropertyForm({ property, onCancel }: PropertyFormProps) {
           />
         </label>
         <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="property-duration">
-          Default duration minutes
-          <input
+          Default cleaning duration
+          <select
             id="property-duration"
             name="defaultCleaningDurationMinutes"
-            type="number"
-            min={1}
             required
-            defaultValue={property?.default_cleaning_duration_minutes ?? 180}
+            defaultValue={hasSupportedDuration ? String(durationValue) : ""}
             className="min-h-11 rounded-md border border-brand-border px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-          />
+          >
+            <option value="" disabled>
+              Select cleaning duration
+            </option>
+            {supportedCleaningDurations.map((duration) => (
+              <option key={duration} value={duration}>
+                {formatCleaningDurationOption(duration)}
+              </option>
+            ))}
+          </select>
+          {!hasSupportedDuration ? (
+            <span className="text-xs font-normal text-amber-700">
+              Current value: {formatCleaningDurationForPropertyDetail(durationValue)}. Choose a supported duration before saving.
+            </span>
+          ) : null}
         </label>
       </div>
 

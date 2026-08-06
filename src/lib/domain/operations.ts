@@ -45,6 +45,8 @@ export const longCleanReasons = [
   "other"
 ] as const;
 
+export const supportedCleaningDurations = [120, 150, 180] as const;
+
 export type AppRole = (typeof appRoles)[number];
 export type CleaningJobStatus = (typeof cleaningJobStatuses)[number];
 export type CleaningType = (typeof cleaningTypes)[number];
@@ -53,6 +55,7 @@ export type BedroomSetupPhysicalBedType = (typeof bedroomSetupPhysicalBedTypes)[
 export type BedConfiguration = (typeof bedConfigurations)[number];
 export type BedroomSetupBedConfiguration = (typeof bedroomSetupBedConfigurations)[number];
 export type LongCleanReason = (typeof longCleanReasons)[number];
+export type SupportedCleaningDuration = (typeof supportedCleaningDurations)[number];
 
 export const appRoleSchema = z.enum(appRoles);
 export const cleaningJobStatusSchema = z.enum(cleaningJobStatuses);
@@ -62,6 +65,13 @@ export const bedroomSetupPhysicalBedTypeSchema = z.enum(bedroomSetupPhysicalBedT
 export const bedConfigurationSchema = z.enum(bedConfigurations);
 export const bedroomSetupBedConfigurationSchema = z.enum(bedroomSetupBedConfigurations);
 export const longCleanReasonSchema = z.enum(longCleanReasons);
+export const supportedCleaningDurationSchema = z.coerce
+  .number()
+  .refine(
+    (value): value is SupportedCleaningDuration =>
+      supportedCleaningDurations.includes(value as SupportedCleaningDuration),
+    "Choose a supported cleaning duration."
+  );
 
 export const initialPropertyNames = ["St Andrews", "Brahms", "Rossini"] as const;
 
@@ -166,6 +176,50 @@ export function formatBedConfiguration(configuration: BedConfiguration) {
   } satisfies Record<BedConfiguration, string>;
 
   return labels[configuration];
+}
+
+function formatHoursAndMinutes(minutes: number, unitStyle: "short" | "long" | "compound") {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const parts: string[] = [];
+
+  if (hours > 0) {
+    parts.push(
+      unitStyle === "short"
+        ? `${hours} hr`
+        : `${hours} ${unitStyle === "compound" || hours === 1 ? "hour" : "hours"}`
+    );
+  }
+
+  if (remainingMinutes > 0 || parts.length === 0) {
+    parts.push(
+      unitStyle === "short"
+        ? `${remainingMinutes} min`
+        : `${remainingMinutes} ${unitStyle === "compound" || remainingMinutes === 1 ? "minute" : "minutes"}`
+    );
+  }
+
+  return parts.join(" ");
+}
+
+export function formatCleaningDurationOption(minutes: number) {
+  return formatHoursAndMinutes(minutes, "long");
+}
+
+export function formatCleaningDurationForPropertyCard(minutes: number) {
+  return `${formatHoursAndMinutes(minutes, "short")} clean`;
+}
+
+export function formatCleaningDurationForPropertyDetail(minutes: number) {
+  return `${formatHoursAndMinutes(minutes, "compound")} default clean`;
+}
+
+export function formatCleaningDurationForClean(minutes: number) {
+  return `${formatHoursAndMinutes(minutes, "compound")} clean`;
+}
+
+export function isSupportedCleaningDuration(minutes: number): minutes is SupportedCleaningDuration {
+  return supportedCleaningDurations.includes(minutes as SupportedCleaningDuration);
 }
 
 export function requiresReviewForFinalBedConfiguration(args: {

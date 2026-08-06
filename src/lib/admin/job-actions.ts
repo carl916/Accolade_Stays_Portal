@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
-import { bedConfigurationSchema, cleaningTypeSchema } from "@/lib/domain/operations";
+import { bedConfigurationSchema, cleaningTypeSchema, supportedCleaningDurationSchema } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database, Json } from "@/lib/supabase/types";
 
@@ -17,7 +17,7 @@ const createCleaningJobSchema = z
     expectedStartTime: z.string().optional(),
     expectedStartTimeWindowEnd: z.string().optional(),
     guestArrivalDeadline: z.string().optional(),
-    expectedDurationMinutes: z.coerce.number().int().positive("Expected duration must be greater than zero."),
+    expectedDurationMinutes: supportedCleaningDurationSchema,
     cleaningType: cleaningTypeSchema,
     instructions: z.string().trim().optional(),
     notes: z.string().trim().optional(),

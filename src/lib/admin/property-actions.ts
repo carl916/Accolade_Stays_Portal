@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   bedroomSetupBedConfigurations,
   bedroomSetupPhysicalBedTypes,
+  supportedCleaningDurationSchema,
   zipAndLinkBedConfigurations
 } from "@/lib/domain/operations";
 import { requireRole } from "@/lib/auth/session";
@@ -28,7 +29,7 @@ const propertySchema = z.object({
   town: z.string().trim().optional(),
   county: z.string().trim().optional(),
   postcode: z.string().trim().optional(),
-  defaultCleaningDurationMinutes: z.coerce.number().int().positive().default(180),
+  defaultCleaningDurationMinutes: supportedCleaningDurationSchema.default(180),
   notes: z.string().trim().optional()
 });
 

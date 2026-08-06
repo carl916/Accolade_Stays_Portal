@@ -3,7 +3,11 @@ import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
-import { formatBedConfiguration, getBedConfigurationAction } from "@/lib/domain/operations";
+import {
+  formatBedConfiguration,
+  formatCleaningDurationForClean,
+  getBedConfigurationAction
+} from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
@@ -67,7 +71,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ jobI
         </div>
         <div>
           <p className="text-sm font-semibold text-brand-ink">Expected duration</p>
-          <p className="text-sm text-stone-600">{job.expected_duration_minutes} minutes</p>
+          <p className="text-sm text-stone-600">{formatCleaningDurationForClean(job.expected_duration_minutes)}</p>
         </div>
         <div>
           <p className="text-sm font-semibold text-brand-ink">Next action</p>

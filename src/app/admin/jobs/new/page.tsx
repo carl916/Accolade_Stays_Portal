@@ -4,8 +4,11 @@ import { createCleaningJob } from "@/lib/admin/job-actions";
 import { requireRole } from "@/lib/auth/session";
 import {
   cleaningTypes,
+  formatCleaningDurationOption,
   formatBedConfiguration,
-  getBedConfigurationAction
+  getBedConfigurationAction,
+  isSupportedCleaningDuration,
+  supportedCleaningDurations
 } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
@@ -50,6 +53,8 @@ export default async function NewCleaningJobPage({ searchParams }: NewJobPagePro
     .order("name");
   const properties = (propertyData ?? []) as PropertyRow[];
   const selectedProperty = properties.find((property) => property.id === selectedPropertyId) ?? properties[0] ?? null;
+  const selectedDuration = selectedProperty?.default_cleaning_duration_minutes ?? 180;
+  const hasSupportedDuration = isSupportedCleaningDuration(selectedDuration);
 
   const { data: bedroomData, error: bedroomError } = selectedProperty
     ? await supabase
@@ -171,15 +176,22 @@ export default async function NewCleaningJobPage({ searchParams }: NewJobPagePro
               />
             </label>
             <label className="grid gap-2 text-sm font-medium text-brand-ink">
-              Expected duration minutes
-              <input
+              Expected duration
+              <select
                 name="expectedDurationMinutes"
-                type="number"
-                min={1}
                 required
-                defaultValue={selectedProperty.default_cleaning_duration_minutes}
+                defaultValue={hasSupportedDuration ? String(selectedDuration) : ""}
                 className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-              />
+              >
+                <option value="" disabled>
+                  Select cleaning duration
+                </option>
+                {supportedCleaningDurations.map((duration) => (
+                  <option key={duration} value={duration}>
+                    {formatCleaningDurationOption(duration)}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 

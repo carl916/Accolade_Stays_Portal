@@ -2,6 +2,7 @@ import { CalendarClock, Plus } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
+import { formatCleaningDurationForPropertyCard } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
@@ -87,7 +88,8 @@ export default async function AdminJobsPage() {
                   {job.expected_start_time ? ` at ${job.expected_start_time.slice(0, 5)}` : ""}
                 </p>
                 <p className="mt-2 text-sm text-stone-600">
-                  {cleaningTypeLabels[job.cleaning_type]} · {job.expected_duration_minutes} minutes
+                  {cleaningTypeLabels[job.cleaning_type]} -{" "}
+                  {formatCleaningDurationForPropertyCard(job.expected_duration_minutes)}
                 </p>
               </div>
             </div>

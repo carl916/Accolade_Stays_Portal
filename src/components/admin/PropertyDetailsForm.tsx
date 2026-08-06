@@ -2,6 +2,7 @@
 
 import { Clock, MapPin, Pencil, StickyNote } from "lucide-react";
 import { useState } from "react";
+import { formatCleaningDurationForPropertyDetail } from "@/lib/domain/operations";
 import type { Database } from "@/lib/supabase/types";
 import { ModalSheet } from "./ModalSheet";
 import { PropertyForm } from "./PropertyForm";
@@ -50,7 +51,7 @@ export function PropertyDetailsForm({ property }: PropertyDetailsFormProps) {
               </p>
               <p className="flex items-center gap-2">
                 <Clock className="h-4 w-4 shrink-0 text-brand-darkSlate" aria-hidden="true" />
-                <span>{property.default_cleaning_duration_minutes} minute default clean</span>
+                <span>{formatCleaningDurationForPropertyDetail(property.default_cleaning_duration_minutes)}</span>
               </p>
               {property.notes ? (
                 <p className="flex items-center gap-2 text-stone-600">

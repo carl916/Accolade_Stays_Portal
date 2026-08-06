@@ -3,7 +3,12 @@
 import { BedDouble, ChevronRight, Clock, Grid2X2, MapPin, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { formatBedConfiguration, type BedConfiguration, type PhysicalBedType } from "@/lib/domain/operations";
+import {
+  formatBedConfiguration,
+  formatCleaningDurationForPropertyCard,
+  type BedConfiguration,
+  type PhysicalBedType
+} from "@/lib/domain/operations";
 import { ModalSheet } from "./ModalSheet";
 import { PropertyForm, type PropertyFormProperty } from "./PropertyForm";
 
@@ -117,7 +122,7 @@ export function PropertiesListClient({ properties, errorMessage, searchError }: 
                   <span aria-hidden="true">.</span>
                   <span className="inline-flex items-center gap-1.5">
                     <Clock className="h-4 w-4 text-brand-darkSlate" aria-hidden="true" />
-                    {property.default_cleaning_duration_minutes} min
+                    {formatCleaningDurationForPropertyCard(property.default_cleaning_duration_minutes)}
                   </span>
                 </div>
 

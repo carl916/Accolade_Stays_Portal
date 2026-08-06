@@ -8,12 +8,18 @@ import {
   canTransitionCleaningJobStatus,
   cleaningTypes,
   formatBedConfiguration,
+  formatCleaningDurationForClean,
+  formatCleaningDurationForPropertyCard,
+  formatCleaningDurationForPropertyDetail,
+  formatCleaningDurationOption,
   getBedConfigurationAction,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
   isRoleAllowed,
-  requiresReviewForFinalBedConfiguration
+  requiresReviewForFinalBedConfiguration,
+  supportedCleaningDurationSchema,
+  supportedCleaningDurations
 } from "@/lib/domain/operations";
 
 describe("operations domain rules", () => {
@@ -110,6 +116,19 @@ describe("operations domain rules", () => {
 
   it("keeps initial cleaning types aligned with the MVP", () => {
     expect(cleaningTypes).toEqual(["standard_changeover", "mid_stay_clean", "deep_or_remedial_clean", "other"]);
+  });
+
+  it("formats and validates supported property cleaning durations", () => {
+    expect(supportedCleaningDurations).toEqual([120, 150, 180]);
+    expect(formatCleaningDurationOption(120)).toBe("2 hours");
+    expect(formatCleaningDurationOption(150)).toBe("2 hours 30 minutes");
+    expect(formatCleaningDurationOption(180)).toBe("3 hours");
+    expect(formatCleaningDurationForPropertyCard(150)).toBe("2 hr 30 min clean");
+    expect(formatCleaningDurationForPropertyDetail(120)).toBe("2 hour default clean");
+    expect(formatCleaningDurationForPropertyDetail(125)).toBe("2 hour 5 minute default clean");
+    expect(formatCleaningDurationForClean(180)).toBe("3 hour clean");
+    expect(supportedCleaningDurationSchema.safeParse("150").success).toBe(true);
+    expect(supportedCleaningDurationSchema.safeParse("125").success).toBe(false);
   });
 
   it("seeds the configurable MVP linen items", () => {
