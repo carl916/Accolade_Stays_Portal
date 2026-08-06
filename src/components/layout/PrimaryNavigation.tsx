@@ -29,6 +29,10 @@ export function PrimaryNavigation({ profile }: PrimaryNavigationProps) {
   const pathname = usePathname();
 
   if (!profile) {
+    if (pathname === "/" || pathname === "/login") {
+      return null;
+    }
+
     return (
       <nav aria-label="Primary navigation" className="flex items-center gap-2">
         <Link href="/login" className={navClassName(isActivePath(pathname, "/login"))}>

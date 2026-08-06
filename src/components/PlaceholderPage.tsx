@@ -38,7 +38,7 @@ export function PlaceholderPage({ eyebrow, title, description, nextAction }: Pla
           <CircleDashed className="mt-0.5 h-5 w-5 text-brand-moss" aria-hidden="true" />
           <div>
             <p className="text-sm font-semibold text-brand-ink">Current status</p>
-            <p className="text-sm text-stone-600">Framework placeholder</p>
+            <p className="text-sm text-stone-600">Signed in</p>
           </div>
         </div>
         <div className="flex items-start gap-3 rounded-lg border border-stone-200 bg-white p-4">
