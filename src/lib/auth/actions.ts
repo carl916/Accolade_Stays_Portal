@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getSupabaseSignInErrorMessage } from "@/lib/auth/errors";
 import { signInSchema } from "@/lib/auth/validation";
 import { getRoleHomePath } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -26,8 +27,18 @@ export async function signInWithPassword(input: unknown): Promise<SignInState> {
   const { error, data } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error || !data.user) {
+    if (error) {
+      console.error("Supabase sign-in failed", {
+        code: error.code,
+        status: error.status,
+        message: error.message
+      });
+    }
+
     return {
-      error: "We could not sign you in with those details."
+      error: error
+        ? getSupabaseSignInErrorMessage(error)
+        : "We could not sign you in. Supabase did not return a user session."
     };
   }
 
@@ -40,6 +51,13 @@ export async function signInWithPassword(input: unknown): Promise<SignInState> {
   const signInProfile = profile as SignInProfile | null;
 
   if (profileError || !signInProfile || !signInProfile.is_active) {
+    if (profileError) {
+      console.error("Profile lookup failed after sign-in", {
+        code: profileError.code,
+        message: profileError.message
+      });
+    }
+
     await supabase.auth.signOut();
 
     return {

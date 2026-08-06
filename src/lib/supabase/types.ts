@@ -658,6 +658,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: boolean;
       };
+      current_user_is_administrator: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
       current_user_role: {
         Args: Record<string, never>;
         Returns: Database["public"]["Enums"]["app_role"];

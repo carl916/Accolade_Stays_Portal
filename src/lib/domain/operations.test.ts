@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canCleanerAccessJob,
   canManageOperations,
+  canManageSettings,
   canTransitionCleaningJobStatus,
   cleaningTypes,
   getRoleHomePath,
@@ -16,6 +17,12 @@ describe("operations domain rules", () => {
     expect(canManageOperations("administrator")).toBe(true);
     expect(canManageOperations("cleaning_manager")).toBe(true);
     expect(canManageOperations("cleaner")).toBe(false);
+  });
+
+  it("limits settings management to administrators", () => {
+    expect(canManageSettings("administrator")).toBe(true);
+    expect(canManageSettings("cleaning_manager")).toBe(false);
+    expect(canManageSettings("cleaner")).toBe(false);
   });
 
   it("limits cleaner job access to their own assigned jobs", () => {

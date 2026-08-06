@@ -399,6 +399,16 @@ as $$
   select coalesce(public.current_user_role() in ('administrator', 'cleaning_manager'), false)
 $$;
 
+create or replace function public.current_user_is_administrator()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(public.current_user_role() = 'administrator', false)
+$$;
+
 create or replace function public.user_can_access_cleaning_job(job_id uuid)
 returns boolean
 language sql
@@ -456,12 +466,12 @@ to authenticated
 using (public.current_user_role() = 'administrator')
 with check (public.current_user_role() = 'administrator');
 
-create policy "Managers can manage properties"
+create policy "Administrators can manage properties"
 on public.properties
 for all
 to authenticated
-using (public.current_user_can_manage_operations())
-with check (public.current_user_can_manage_operations());
+using (public.current_user_is_administrator())
+with check (public.current_user_is_administrator());
 
 create policy "Cleaners can view assigned job properties"
 on public.properties
@@ -477,12 +487,12 @@ using (
   )
 );
 
-create policy "Managers can manage bedrooms"
+create policy "Administrators can manage bedrooms"
 on public.bedrooms
 for all
 to authenticated
-using (public.current_user_can_manage_operations())
-with check (public.current_user_can_manage_operations());
+using (public.current_user_is_administrator())
+with check (public.current_user_is_administrator());
 
 create policy "Cleaners can view assigned job bedrooms"
 on public.bedrooms
@@ -498,12 +508,12 @@ using (
   )
 );
 
-create policy "Managers can manage bedroom permitted configurations"
+create policy "Administrators can manage bedroom permitted configurations"
 on public.bedroom_permitted_configurations
 for all
 to authenticated
-using (public.current_user_can_manage_operations())
-with check (public.current_user_can_manage_operations());
+using (public.current_user_is_administrator())
+with check (public.current_user_is_administrator());
 
 create policy "Cleaners can view assigned job bedroom permitted configurations"
 on public.bedroom_permitted_configurations
@@ -520,12 +530,12 @@ using (
   )
 );
 
-create policy "Managers can manage linen items"
+create policy "Administrators can manage linen items"
 on public.linen_items
 for all
 to authenticated
-using (public.current_user_can_manage_operations())
-with check (public.current_user_can_manage_operations());
+using (public.current_user_is_administrator())
+with check (public.current_user_is_administrator());
 
 create policy "Cleaners can view active linen items"
 on public.linen_items

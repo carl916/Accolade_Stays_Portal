@@ -89,6 +89,10 @@ export function canManageOperations(role: AppRole | null | undefined) {
   return role === "administrator" || role === "cleaning_manager";
 }
 
+export function canManageSettings(role: AppRole | null | undefined) {
+  return role === "administrator";
+}
+
 export function canCleanerAccessJob(args: {
   role: AppRole | null | undefined;
   userId: string | null | undefined;
