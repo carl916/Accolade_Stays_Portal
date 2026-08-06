@@ -16,7 +16,7 @@ type PropertyRow = Pick<
 >;
 type BedroomRow = Pick<
   Database["public"]["Tables"]["bedrooms"]["Row"],
-  "id" | "name" | "physical_bed_type" | "current_configuration" | "default_configuration"
+  "id" | "name" | "physical_bed_type" | "current_configuration"
 > & {
   bedroom_permitted_configurations: Pick<
     Database["public"]["Tables"]["bedroom_permitted_configurations"]["Row"],
@@ -54,7 +54,7 @@ export default async function NewCleaningJobPage({ searchParams }: NewJobPagePro
   const { data: bedroomData, error: bedroomError } = selectedProperty
     ? await supabase
         .from("bedrooms")
-        .select("id,name,physical_bed_type,current_configuration,default_configuration,bedroom_permitted_configurations(configuration,is_active)")
+        .select("id,name,physical_bed_type,current_configuration,bedroom_permitted_configurations(configuration,is_active)")
         .eq("property_id", selectedProperty.id)
         .eq("is_active", true)
         .order("name")
@@ -233,8 +233,8 @@ function BedroomConfigurationCard({ bedroom }: { bedroom: BedroomRow }) {
   const permittedConfigurations = bedroom.bedroom_permitted_configurations
     .filter((item) => item.is_active)
     .map((item) => item.configuration);
-  const defaultRequiredConfiguration = permittedConfigurations.includes(bedroom.default_configuration)
-    ? bedroom.default_configuration
+  const initialRequiredConfiguration = permittedConfigurations.includes(bedroom.current_configuration)
+    ? bedroom.current_configuration
     : permittedConfigurations[0] ?? "unknown";
 
   return (
@@ -252,7 +252,7 @@ function BedroomConfigurationCard({ bedroom }: { bedroom: BedroomRow }) {
         Required setup
         <select
           name={`requiredConfiguration:${bedroom.id}`}
-          defaultValue={defaultRequiredConfiguration}
+          defaultValue={initialRequiredConfiguration}
           className="min-h-12 rounded-md border border-stone-300 bg-white px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
         >
           {permittedConfigurations.map((configuration) => (
@@ -266,7 +266,7 @@ function BedroomConfigurationCard({ bedroom }: { bedroom: BedroomRow }) {
         Action:{" "}
         {getBedConfigurationAction({
           currentConfiguration: bedroom.current_configuration,
-          requiredConfiguration: defaultRequiredConfiguration
+          requiredConfiguration: initialRequiredConfiguration
         })}
       </p>
     </div>

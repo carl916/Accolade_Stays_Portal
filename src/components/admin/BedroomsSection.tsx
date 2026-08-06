@@ -5,7 +5,9 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { updateBedroom } from "@/lib/admin/property-actions";
 import {
+  bedroomSetupPhysicalBedTypes,
   formatBedConfiguration,
+  zipAndLinkBedConfigurations,
   type BedConfiguration,
   type PhysicalBedType
 } from "@/lib/domain/operations";
@@ -26,14 +28,15 @@ type BedroomsSectionProps = {
 };
 
 function getActivePermittedConfigurations(bedroom: BedroomFormBedroom) {
-  const active = bedroom.bedroom_permitted_configurations
-    .filter((item) => item.is_active)
-    .map((item) => item.configuration);
-  const required = [bedroom.default_configuration, bedroom.current_configuration].filter(
-    (configuration): configuration is BedConfiguration => Boolean(configuration)
-  );
+  if (bedroom.physical_bed_type === "zip_and_link") {
+    return [...zipAndLinkBedConfigurations];
+  }
 
-  return [...new Set([...active, ...required])];
+  if (bedroom.physical_bed_type === "fixed_double") {
+    return ["double"] satisfies BedConfiguration[];
+  }
+
+  return [];
 }
 
 function formatConfirmedAt(value: string) {
@@ -62,8 +65,10 @@ function CurrentSetupButton({ configuration }: { configuration: BedConfiguration
 
 function CurrentSetupSelector({ propertyId, bedroom }: { propertyId: string; bedroom: BedroomFormBedroom }) {
   const permittedConfigurations = getActivePermittedConfigurations(bedroom);
-  const everydayConfigurations = permittedConfigurations.filter((configuration) => configuration !== "unknown");
-  const canChangeQuickly = everydayConfigurations.length > 1;
+  const canEditCurrentSetup = bedroomSetupPhysicalBedTypes.includes(
+    bedroom.physical_bed_type as (typeof bedroomSetupPhysicalBedTypes)[number]
+  );
+  const canChangeQuickly = canEditCurrentSetup && permittedConfigurations.length > 1;
 
   if (!canChangeQuickly) {
     return (
@@ -79,12 +84,8 @@ function CurrentSetupSelector({ propertyId, bedroom }: { propertyId: string; bed
       <input type="hidden" name="bedroomId" value={bedroom.id} />
       <input type="hidden" name="name" value={bedroom.name} />
       <input type="hidden" name="physicalBedType" value={bedroom.physical_bed_type} />
-      <input type="hidden" name="defaultConfiguration" value={bedroom.default_configuration} />
       {bedroom.is_active ? <input type="hidden" name="isActive" value="on" /> : null}
       {permittedConfigurations.map((configuration) => (
-        <input key={configuration} type="hidden" name="permittedConfigurations" value={configuration} />
-      ))}
-      {everydayConfigurations.map((configuration) => (
         <CurrentSetupButton key={configuration} configuration={configuration} />
       ))}
     </form>

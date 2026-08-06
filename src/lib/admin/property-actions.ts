@@ -43,9 +43,7 @@ const bedroomSchema = z
     bedroomId: z.string().uuid().optional(),
     name: z.string().trim().min(1, "Bedroom name is required."),
     physicalBedType: z.enum(bedroomSetupPhysicalBedTypes),
-    defaultConfiguration: z.enum(bedroomSetupBedConfigurations),
-    currentConfiguration: z.enum(bedroomSetupBedConfigurations),
-    permittedConfigurations: z.array(z.enum(bedroomSetupBedConfigurations)).min(1),
+    currentConfiguration: z.enum(bedroomSetupBedConfigurations).optional(),
     isActive: z.coerce.boolean().default(false)
   })
   .transform((value) => {
@@ -58,35 +56,33 @@ const bedroomSchema = z
       };
     }
 
-    return value;
+    return {
+      ...value,
+      defaultConfiguration: value.currentConfiguration,
+      permittedConfigurations: [...zipAndLinkBedConfigurations]
+    };
+  })
+  .refine((value) => value.physicalBedType !== "zip_and_link" || Boolean(value.currentConfiguration), {
+    message: "Current setup is required for a zip-and-link bed.",
+    path: ["currentConfiguration"]
   })
   .refine(
     (value) =>
       value.physicalBedType !== "zip_and_link" ||
-      value.permittedConfigurations.every((configuration) =>
-        (zipAndLinkBedConfigurations as readonly string[]).includes(configuration)
-      ),
+      (zipAndLinkBedConfigurations as readonly string[]).includes(value.currentConfiguration ?? ""),
     {
-      message: "Zip-and-link bedrooms can only permit King or Twin.",
-      path: ["permittedConfigurations"]
+      message: "Zip-and-link current setup must be King or Twin.",
+      path: ["currentConfiguration"]
     }
   )
-  .refine((value) => value.permittedConfigurations.includes(value.defaultConfiguration), {
-    message: "Default configuration must be permitted.",
-    path: ["defaultConfiguration"]
-  })
-  .refine((value) => value.permittedConfigurations.includes(value.currentConfiguration), {
-    message: "Current configuration must be permitted.",
+  .refine((value) => (value.permittedConfigurations as readonly string[]).includes(value.currentConfiguration ?? ""), {
+    message: "Current setup must be permitted.",
     path: ["currentConfiguration"]
   });
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
-}
-
-function getFormStringArray(formData: FormData, key: string) {
-  return formData.getAll(key).filter((value): value is string => typeof value === "string");
 }
 
 function redirectWithError(path: string, message: string): never {
@@ -194,9 +190,7 @@ export async function createBedroom(formData: FormData) {
     propertyId,
     name: getFormString(formData, "name"),
     physicalBedType: getFormString(formData, "physicalBedType"),
-    defaultConfiguration: getFormString(formData, "defaultConfiguration"),
     currentConfiguration: getFormString(formData, "currentConfiguration"),
-    permittedConfigurations: getFormStringArray(formData, "permittedConfigurations"),
     isActive: true
   });
   const errorPath = `/admin/properties/${propertyId}`;
@@ -252,9 +246,7 @@ export async function updateBedroom(formData: FormData) {
     bedroomId,
     name: getFormString(formData, "name"),
     physicalBedType: getFormString(formData, "physicalBedType"),
-    defaultConfiguration: getFormString(formData, "defaultConfiguration"),
     currentConfiguration: getFormString(formData, "currentConfiguration"),
-    permittedConfigurations: getFormStringArray(formData, "permittedConfigurations"),
     isActive: formData.has("isActive")
   });
   const errorPath = `/admin/properties/${propertyId}`;
