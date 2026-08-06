@@ -1,11 +1,10 @@
 "use client";
 
-import { BedDouble, CalendarDays, MoreHorizontal, Plus, Settings } from "lucide-react";
-import { useState } from "react";
-import { useFormStatus } from "react-dom";
-import { updateBedroom } from "@/lib/admin/property-actions";
+import { BedDouble, CalendarDays, Loader2, Pencil, Plus } from "lucide-react";
+import React from "react";
+import { useEffect, useState, useTransition, type KeyboardEvent } from "react";
+import { updateBedroomCurrentSetup } from "@/lib/admin/property-actions";
 import {
-  bedroomSetupPhysicalBedTypes,
   formatBedConfiguration,
   zipAndLinkBedConfigurations,
   type BedConfiguration,
@@ -47,48 +46,103 @@ function formatConfirmedAt(value: string) {
   }).format(new Date(value));
 }
 
-function CurrentSetupButton({ configuration }: { configuration: BedConfiguration }) {
-  const { pending } = useFormStatus();
-
-  return (
-    <button
-      type="submit"
-      name="currentConfiguration"
-      value={configuration}
-      disabled={pending}
-      className="min-h-11 rounded-md border border-brand-slate bg-brand-chipSelected px-3 text-sm font-semibold text-brand-ink transition hover:bg-brand-light focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-    >
-      {pending ? "Saving..." : formatBedConfiguration(configuration)}
-    </button>
-  );
-}
-
 function CurrentSetupSelector({ propertyId, bedroom }: { propertyId: string; bedroom: BedroomFormBedroom }) {
   const permittedConfigurations = getActivePermittedConfigurations(bedroom);
-  const canEditCurrentSetup = bedroomSetupPhysicalBedTypes.includes(
-    bedroom.physical_bed_type as (typeof bedroomSetupPhysicalBedTypes)[number]
-  );
-  const canChangeQuickly = canEditCurrentSetup && permittedConfigurations.length > 1;
+  const [selectedConfiguration, setSelectedConfiguration] = useState<BedConfiguration>(bedroom.current_configuration);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const canChangeQuickly = bedroom.physical_bed_type === "zip_and_link" && permittedConfigurations.length > 1;
+
+  useEffect(() => {
+    setSelectedConfiguration(bedroom.current_configuration);
+  }, [bedroom.current_configuration]);
 
   if (!canChangeQuickly) {
     return (
-      <span className="rounded-md bg-brand-chipSelected px-3 py-2 text-sm font-semibold text-brand-ink">
-        {formatBedConfiguration(bedroom.current_configuration)}
-      </span>
+      <div className="grid gap-1">
+        <span className="inline-flex min-h-10 w-fit items-center rounded-md border border-brand-border bg-brand-muted px-3 text-sm font-semibold text-brand-ink">
+          {formatBedConfiguration(bedroom.current_configuration)}
+        </span>
+      </div>
     );
   }
 
+  function chooseConfiguration(configuration: BedConfiguration) {
+    if (configuration === selectedConfiguration || isPending) {
+      return;
+    }
+
+    const previousConfiguration = selectedConfiguration;
+    setSelectedConfiguration(configuration);
+    setErrorMessage(null);
+
+    startTransition(async () => {
+      const result = await updateBedroomCurrentSetup({
+        propertyId,
+        bedroomId: bedroom.id,
+        currentConfiguration: configuration
+      });
+
+      if (result.error) {
+        setSelectedConfiguration(previousConfiguration);
+        setErrorMessage(result.error);
+      }
+    });
+  }
+
+  function handleConfigurationKeyDown(event: KeyboardEvent<HTMLButtonElement>, configuration: BedConfiguration) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+
+    event.preventDefault();
+    const currentIndex = zipAndLinkBedConfigurations.indexOf(
+      configuration as (typeof zipAndLinkBedConfigurations)[number]
+    );
+    const nextIndex =
+      event.key === "ArrowRight"
+        ? (currentIndex + 1) % zipAndLinkBedConfigurations.length
+        : (currentIndex - 1 + zipAndLinkBedConfigurations.length) % zipAndLinkBedConfigurations.length;
+    chooseConfiguration(zipAndLinkBedConfigurations[nextIndex]);
+  }
+
   return (
-    <form action={updateBedroom} className="flex flex-wrap gap-2">
-      <input type="hidden" name="propertyId" value={propertyId} />
-      <input type="hidden" name="bedroomId" value={bedroom.id} />
-      <input type="hidden" name="name" value={bedroom.name} />
-      <input type="hidden" name="physicalBedType" value={bedroom.physical_bed_type} />
-      {bedroom.is_active ? <input type="hidden" name="isActive" value="on" /> : null}
-      {permittedConfigurations.map((configuration) => (
-        <CurrentSetupButton key={configuration} configuration={configuration} />
-      ))}
-    </form>
+    <div className="grid gap-1">
+      <div className="flex items-center gap-2">
+        <div
+          role="radiogroup"
+          aria-label={`${bedroom.name} current setup`}
+          className="inline-grid min-h-10 grid-cols-2 overflow-hidden rounded-md border border-brand-border bg-white"
+        >
+          {zipAndLinkBedConfigurations.map((configuration) => {
+            const isSelected = selectedConfiguration === configuration;
+
+            return (
+              <button
+                key={configuration}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                disabled={isPending}
+                onClick={() => chooseConfiguration(configuration)}
+                onKeyDown={(event) => handleConfigurationKeyDown(event, configuration)}
+                className={`min-h-10 min-w-20 px-3 text-sm font-semibold transition focus:outline-none focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-brand-focus disabled:cursor-wait ${
+                  isSelected
+                    ? "bg-brand-primary text-brand-primaryForeground shadow-inner"
+                    : "bg-white text-stone-700 hover:bg-brand-muted hover:text-brand-primary"
+                }`}
+              >
+                {formatBedConfiguration(configuration)}
+              </button>
+            );
+          })}
+        </div>
+        {isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin text-brand-primary" aria-label="Saving current setup" />
+        ) : null}
+      </div>
+      {errorMessage ? <p className="text-xs font-medium text-red-700">{errorMessage}</p> : null}
+    </div>
   );
 }
 
@@ -127,10 +181,17 @@ export function BedroomsSection({ propertyId, bedrooms, errorMessage }: Bedrooms
         ) : null}
 
         <div className="overflow-hidden rounded-lg border border-brand-border bg-white shadow-sm">
+          {bedrooms.length > 0 ? (
+            <div className="hidden grid-cols-[minmax(0,1fr)_12rem_3rem] items-end gap-4 border-b border-brand-border bg-brand-muted px-4 py-2 sm:grid">
+              <span aria-hidden="true" />
+              <p className="text-xs font-semibold uppercase tracking-normal text-brand-darkSlate">Current setup</p>
+              <span aria-hidden="true" />
+            </div>
+          ) : null}
           {bedrooms.map((bedroom, index) => (
             <div
               key={bedroom.id}
-              className={`grid gap-3 p-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:p-4 ${
+              className={`grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem_3rem] sm:items-center sm:gap-4 sm:p-4 ${
                 index === 0 ? "" : "border-t border-brand-border"
               }`}
             >
@@ -152,18 +213,24 @@ export function BedroomsSection({ propertyId, bedrooms, errorMessage }: Bedrooms
                   </p>
                 ) : null}
               </div>
-              <div className="grid gap-1">
-                <p className="text-xs font-semibold uppercase tracking-normal text-brand-darkSlate">Current setup</p>
-                <CurrentSetupSelector propertyId={propertyId} bedroom={bedroom} />
+              <div className="flex flex-wrap items-start justify-between gap-3 sm:contents">
+                <div className="grid gap-1 sm:justify-start">
+                  <p className="text-xs font-semibold uppercase tracking-normal text-brand-darkSlate sm:hidden">
+                    Current setup
+                  </p>
+                  <CurrentSetupSelector propertyId={propertyId} bedroom={bedroom} />
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Edit bedroom: ${bedroom.name}`}
+                  title="Edit bedroom"
+                  onClick={() => setSettingsBedroom(bedroom)}
+                  className="inline-flex min-h-10 min-w-10 w-fit items-center justify-center rounded-md border border-brand-border text-brand-ink transition hover:bg-brand-muted hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 sm:justify-self-end"
+                >
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only">Edit bedroom</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setSettingsBedroom(bedroom)}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-brand-border px-3 text-sm font-semibold text-brand-ink transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-              >
-                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                Settings
-              </button>
             </div>
           ))}
         </div>
@@ -179,8 +246,8 @@ export function BedroomsSection({ propertyId, bedrooms, errorMessage }: Bedrooms
         onClose={() => setSettingsBedroom(null)}
       >
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-brand-darkSlate">
-          <Settings className="h-4 w-4" aria-hidden="true" />
-          Bedroom administrative settings
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+          Bedroom details
         </div>
         {settingsBedroom ? (
           <BedroomSetupForm

@@ -22,6 +22,10 @@ type BedroomPermittedConfigurationInsert =
 type BedroomPermittedConfigurationUpdate =
   Database["public"]["Tables"]["bedroom_permitted_configurations"]["Update"];
 
+export type UpdateBedroomCurrentSetupResult = {
+  error?: string;
+};
+
 const propertySchema = z.object({
   name: z.string().trim().min(1, "Property name is required."),
   addressLine1: z.string().trim().optional(),
@@ -303,4 +307,47 @@ export async function updateBedroom(formData: FormData) {
 
   revalidatePath(errorPath);
   redirect(errorPath);
+}
+
+export async function updateBedroomCurrentSetup(input: {
+  propertyId: string;
+  bedroomId: string;
+  currentConfiguration: unknown;
+}): Promise<UpdateBedroomCurrentSetupResult> {
+  await requireRole(["administrator"]);
+
+  const parsed = z
+    .object({
+      propertyId: z.string().uuid(),
+      bedroomId: z.string().uuid(),
+      currentConfiguration: z.enum(zipAndLinkBedConfigurations)
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      error: parsed.error.issues[0]?.message ?? "Choose King or Twin."
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const bedroomUpdate = {
+    current_configuration: parsed.data.currentConfiguration,
+    default_configuration: parsed.data.currentConfiguration
+  } satisfies BedroomUpdate;
+  const { error } = await supabase
+    .from("bedrooms")
+    .update(bedroomUpdate as never)
+    .eq("id", parsed.data.bedroomId)
+    .eq("property_id", parsed.data.propertyId)
+    .eq("physical_bed_type", "zip_and_link");
+
+  if (error) {
+    return {
+      error: error.message
+    };
+  }
+
+  revalidatePath(`/admin/properties/${parsed.data.propertyId}`);
+  return {};
 }
