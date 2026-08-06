@@ -39,6 +39,13 @@ Database changes live in `supabase/migrations`.
 
 Apply migrations to staging first, verify the app, then apply the same migration set to production. The initial schema creates the core operations tables, enables Row Level Security on every table, seeds the three initial properties, and records audit events whenever a cleaning job status is created or changed.
 
+Environment-specific SQL scripts for manually applying live database changes are kept in:
+
+- `supabase/scripts/staging`
+- `supabase/scripts/production`
+
+Run the staging script first, verify the staging app, then run the matching production script. Keep the SQL body aligned with the migration in `supabase/migrations`.
+
 The first administrator profile must be bootstrapped through a trusted server-side process or the Supabase dashboard. After that, administrators can manage user roles through the application workflows that will be added later.
 
 ## Authentication
