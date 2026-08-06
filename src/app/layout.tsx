@@ -12,7 +12,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Accolade Stays Operations Portal",
-  description: "Cleaning operations portal for Accolade Stays"
+  description: "Cleaning operations portal for Accolade Stays",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico"
+  }
 };
 
 type RootLayoutProps = {

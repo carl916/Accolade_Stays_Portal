@@ -7,9 +7,8 @@ export function EnvironmentBanner() {
     return null;
   }
 
-  return (
-    <div className="bg-brand-brass px-4 py-2 text-center text-sm font-semibold text-white">
-      {appEnv} environment
-    </div>
-  );
+  const bannerClassName =
+    appEnv === "Staging" ? "bg-brand-mid text-brand-ink" : "bg-brand-pale text-brand-ink";
+
+  return <div className={`${bannerClassName} px-4 py-1.5 text-center text-sm font-semibold`}>{appEnv} environment</div>;
 }

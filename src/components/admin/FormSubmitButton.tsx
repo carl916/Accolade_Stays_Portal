@@ -16,7 +16,7 @@ export function FormSubmitButton({ children, pendingLabel = "Saving...", classNa
     <button
       type="submit"
       disabled={pending}
-      className={`min-h-11 rounded-md bg-brand-moss px-4 text-sm font-semibold text-white transition hover:bg-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`min-h-11 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
     >
       {pending ? pendingLabel : children}
     </button>

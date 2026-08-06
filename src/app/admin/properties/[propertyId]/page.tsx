@@ -42,17 +42,11 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
 
   return (
     <section className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-2">
+      <div>
         <Link href="/admin/properties" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-moss">
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Properties
         </Link>
-        <div>
-          <h1 className="text-2xl font-semibold text-brand-ink sm:text-3xl">{property.name}</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
-            Maintain property details and bedroom templates used when creating cleaning jobs.
-          </p>
-        </div>
       </div>
 
       {resolvedSearchParams?.error ? (

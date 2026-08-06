@@ -201,12 +201,13 @@ export function BedroomSetupForm({ propertyId, bedroom, onCancel }: BedroomSetup
                 type="button"
                 aria-pressed={isSelected}
                 onClick={() => toggleConfiguration(configuration)}
-                className={`min-h-11 rounded-md border px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 ${
+                className={`min-h-11 rounded-md border px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 ${
                   isSelected
-                    ? "border-brand-moss bg-brand-moss text-white"
-                    : "border-stone-300 bg-white text-stone-700 hover:bg-stone-50"
+                    ? "border-brand-slate bg-brand-chipSelected text-brand-ink"
+                    : "border-brand-border bg-white text-stone-700 hover:bg-brand-muted"
                 }`}
               >
+                {isSelected ? "Selected: " : ""}
                 {formatBedConfiguration(configuration)}
               </button>
             );
