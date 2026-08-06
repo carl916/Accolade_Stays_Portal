@@ -19,7 +19,11 @@ type BedroomPermittedConfigurationUpdate =
 
 const propertySchema = z.object({
   name: z.string().trim().min(1, "Property name is required."),
-  address: z.string().trim().optional(),
+  addressLine1: z.string().trim().optional(),
+  addressLine2: z.string().trim().optional(),
+  town: z.string().trim().optional(),
+  county: z.string().trim().optional(),
+  postcode: z.string().trim().optional(),
   defaultCleaningDurationMinutes: z.coerce.number().int().positive().default(180),
   notes: z.string().trim().optional()
 });
@@ -67,7 +71,11 @@ export async function createProperty(formData: FormData) {
 
   const parsed = propertySchema.safeParse({
     name: getFormString(formData, "name"),
-    address: getFormString(formData, "address"),
+    addressLine1: getFormString(formData, "addressLine1"),
+    addressLine2: getFormString(formData, "addressLine2"),
+    town: getFormString(formData, "town"),
+    county: getFormString(formData, "county"),
+    postcode: getFormString(formData, "postcode"),
     defaultCleaningDurationMinutes: getFormString(formData, "defaultCleaningDurationMinutes"),
     notes: getFormString(formData, "notes")
   });
@@ -79,7 +87,11 @@ export async function createProperty(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const newProperty = {
     name: parsed.data.name,
-    address: parsed.data.address || null,
+    address_line_1: parsed.data.addressLine1 || "",
+    address_line_2: parsed.data.addressLine2 || "",
+    town: parsed.data.town || "",
+    county: parsed.data.county || "",
+    postcode: parsed.data.postcode || "",
     default_cleaning_duration_minutes: parsed.data.defaultCleaningDurationMinutes,
     notes: parsed.data.notes || ""
   } satisfies PropertyInsert;
@@ -106,7 +118,11 @@ export async function updateProperty(formData: FormData) {
   const parsed = propertyUpdateSchema.safeParse({
     propertyId,
     name: getFormString(formData, "name"),
-    address: getFormString(formData, "address"),
+    addressLine1: getFormString(formData, "addressLine1"),
+    addressLine2: getFormString(formData, "addressLine2"),
+    town: getFormString(formData, "town"),
+    county: getFormString(formData, "county"),
+    postcode: getFormString(formData, "postcode"),
     defaultCleaningDurationMinutes: getFormString(formData, "defaultCleaningDurationMinutes"),
     notes: getFormString(formData, "notes"),
     isActive: formData.has("isActive")
@@ -120,7 +136,11 @@ export async function updateProperty(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const propertyUpdate = {
     name: parsed.data.name,
-    address: parsed.data.address || null,
+    address_line_1: parsed.data.addressLine1 || "",
+    address_line_2: parsed.data.addressLine2 || "",
+    town: parsed.data.town || "",
+    county: parsed.data.county || "",
+    postcode: parsed.data.postcode || "",
     default_cleaning_duration_minutes: parsed.data.defaultCleaningDurationMinutes,
     notes: parsed.data.notes || "",
     is_active: parsed.data.isActive

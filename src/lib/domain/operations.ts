@@ -117,6 +117,47 @@ export function canTransitionCleaningJobStatus(from: CleaningJobStatus, to: Clea
   return (cleaningJobStatusTransitions[from] as readonly CleaningJobStatus[]).includes(to);
 }
 
+export function getBedConfigurationAction(args: {
+  currentConfiguration: BedConfiguration;
+  requiredConfiguration: BedConfiguration;
+}) {
+  if (args.currentConfiguration === args.requiredConfiguration && args.currentConfiguration !== "unknown") {
+    return "No change";
+  }
+
+  if (args.currentConfiguration === "unknown") {
+    return `Confirm current setup, then configure as ${formatBedConfiguration(args.requiredConfiguration)}`;
+  }
+
+  if (args.currentConfiguration === "unmade") {
+    return `Make as ${formatBedConfiguration(args.requiredConfiguration)}`;
+  }
+
+  if (args.currentConfiguration === "king" && args.requiredConfiguration === "two_singles") {
+    return "Split bed";
+  }
+
+  if (args.currentConfiguration === "two_singles" && args.requiredConfiguration === "king") {
+    return "Join beds";
+  }
+
+  return `Change to ${formatBedConfiguration(args.requiredConfiguration)}`;
+}
+
+export function formatBedConfiguration(configuration: BedConfiguration) {
+  const labels = {
+    king: "King",
+    double: "Double",
+    two_singles: "Two singles",
+    single: "Single",
+    unmade: "Unmade",
+    other: "Other",
+    unknown: "Unknown"
+  } satisfies Record<BedConfiguration, string>;
+
+  return labels[configuration];
+}
+
 export function requiresReviewForFinalBedConfiguration(args: {
   requiredConfiguration: BedConfiguration;
   finalConfiguration: BedConfiguration | null | undefined;

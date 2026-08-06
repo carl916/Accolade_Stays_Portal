@@ -29,12 +29,20 @@ export function AppShell({ children, profile }: AppShellProps) {
                   Dashboard
                 </Link>
                 {profile.role === "administrator" ? (
-                  <Link
-                    href="/admin/properties"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
-                  >
-                    Properties
-                  </Link>
+                  <>
+                    <Link
+                      href="/admin/jobs"
+                      className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
+                    >
+                      Jobs
+                    </Link>
+                    <Link
+                      href="/admin/properties"
+                      className="rounded-md px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-brand-mint hover:text-brand-moss focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
+                    >
+                      Properties
+                    </Link>
+                  </>
                 ) : null}
                 <span className="hidden items-center px-2 py-2 text-sm text-stone-600 sm:inline-flex">
                   {profile.full_name}

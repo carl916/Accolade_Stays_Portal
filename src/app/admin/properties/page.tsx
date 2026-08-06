@@ -7,7 +7,15 @@ import type { Database } from "@/lib/supabase/types";
 
 type PropertyRow = Pick<
   Database["public"]["Tables"]["properties"]["Row"],
-  "id" | "name" | "address" | "is_active" | "default_cleaning_duration_minutes"
+  | "id"
+  | "name"
+  | "address_line_1"
+  | "address_line_2"
+  | "town"
+  | "county"
+  | "postcode"
+  | "is_active"
+  | "default_cleaning_duration_minutes"
 >;
 
 type PropertiesPageProps = {
@@ -22,7 +30,7 @@ export default async function AdminPropertiesPage({ searchParams }: PropertiesPa
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("properties")
-    .select("id,name,address,is_active,default_cleaning_duration_minutes")
+    .select("id,name,address_line_1,address_line_2,town,county,postcode,is_active,default_cleaning_duration_minutes")
     .order("name");
   const properties = (data ?? []) as PropertyRow[];
 
@@ -68,7 +76,7 @@ export default async function AdminPropertiesPage({ searchParams }: PropertiesPa
                 <Building2 className="mt-1 h-5 w-5 text-brand-moss" aria-hidden="true" />
                 <div>
                   <h2 className="text-lg font-semibold text-brand-ink">{property.name}</h2>
-                  <p className="mt-1 text-sm text-stone-600">{property.address || "No address recorded"}</p>
+                  <p className="mt-1 text-sm text-stone-600">{formatPropertyAddress(property)}</p>
                   <p className="mt-2 text-sm text-stone-600">
                     Default duration: {property.default_cleaning_duration_minutes} minutes
                   </p>
@@ -95,13 +103,46 @@ export default async function AdminPropertiesPage({ searchParams }: PropertiesPa
               className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="address">
-            Address
-            <textarea
-              id="address"
-              name="address"
-              rows={3}
+          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="addressLine1">
+            Address Line 1
+            <input
+              id="addressLine1"
+              name="addressLine1"
               className="rounded-md border border-stone-300 px-3 py-2 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="addressLine2">
+            Address Line 2
+            <input
+              id="addressLine2"
+              name="addressLine2"
+              className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+            />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="town">
+              Town
+              <input
+                id="town"
+                name="town"
+                className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="county">
+              County
+              <input
+                id="county"
+                name="county"
+                className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+          </div>
+          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="postcode">
+            Postcode
+            <input
+              id="postcode"
+              name="postcode"
+              className="min-h-12 rounded-md border border-stone-300 px-3 text-base uppercase outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
             />
           </label>
           <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="defaultCleaningDurationMinutes">
@@ -135,4 +176,16 @@ export default async function AdminPropertiesPage({ searchParams }: PropertiesPa
       </div>
     </section>
   );
+}
+
+function formatPropertyAddress(property: PropertyRow) {
+  const addressParts = [
+    property.address_line_1,
+    property.address_line_2,
+    property.town,
+    property.county,
+    property.postcode
+  ].filter(Boolean);
+
+  return addressParts.length > 0 ? addressParts.join(", ") : "No address recorded";
 }

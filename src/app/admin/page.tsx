@@ -14,12 +14,20 @@ export default async function AdminPage() {
         nextAction={`Signed in as ${profile.full_name}. Manage property and bedroom setup before creating jobs.`}
       />
       <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-        <Link
-          href="/admin/properties"
-          className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-brand-moss px-4 text-base font-semibold text-white transition hover:bg-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 sm:w-auto"
-        >
-          Manage properties
-        </Link>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/admin/jobs"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-md bg-brand-moss px-4 text-base font-semibold text-white transition hover:bg-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 sm:w-auto"
+          >
+            Manage cleaning jobs
+          </Link>
+          <Link
+            href="/admin/properties"
+            className="inline-flex min-h-12 w-full items-center justify-center rounded-md border border-stone-300 bg-white px-4 text-base font-semibold text-brand-ink transition hover:bg-brand-mint focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 sm:w-auto"
+          >
+            Manage properties
+          </Link>
+        </div>
       </div>
     </div>
   );

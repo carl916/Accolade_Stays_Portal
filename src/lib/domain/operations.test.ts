@@ -5,6 +5,7 @@ import {
   canManageSettings,
   canTransitionCleaningJobStatus,
   cleaningTypes,
+  getBedConfigurationAction,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
@@ -77,6 +78,21 @@ describe("operations domain rules", () => {
         finalConfiguration: "king"
       })
     ).toBe(false);
+  });
+
+  it("calculates bed configuration action labels", () => {
+    expect(getBedConfigurationAction({ currentConfiguration: "king", requiredConfiguration: "king" })).toBe(
+      "No change"
+    );
+    expect(getBedConfigurationAction({ currentConfiguration: "king", requiredConfiguration: "two_singles" })).toBe(
+      "Split bed"
+    );
+    expect(getBedConfigurationAction({ currentConfiguration: "two_singles", requiredConfiguration: "king" })).toBe(
+      "Join beds"
+    );
+    expect(getBedConfigurationAction({ currentConfiguration: "unknown", requiredConfiguration: "double" })).toBe(
+      "Confirm current setup, then configure as Double"
+    );
   });
 
   it("keeps the initial property list aligned with the product brief", () => {

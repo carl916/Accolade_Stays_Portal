@@ -40,7 +40,11 @@ export type Database = {
         Row: {
           id: string;
           name: string;
-          address: string | null;
+          address_line_1: string;
+          address_line_2: string;
+          town: string;
+          county: string;
+          postcode: string;
           default_cleaning_duration_minutes: number;
           notes: string;
           is_active: boolean;
@@ -50,7 +54,11 @@ export type Database = {
         Insert: {
           id?: string;
           name: string;
-          address?: string | null;
+          address_line_1?: string;
+          address_line_2?: string;
+          town?: string;
+          county?: string;
+          postcode?: string;
           default_cleaning_duration_minutes?: number;
           notes?: string;
           is_active?: boolean;
@@ -60,7 +68,11 @@ export type Database = {
         Update: {
           id?: string;
           name?: string;
-          address?: string | null;
+          address_line_1?: string;
+          address_line_2?: string;
+          town?: string;
+          county?: string;
+          postcode?: string;
           default_cleaning_duration_minutes?: number;
           notes?: string;
           is_active?: boolean;
@@ -654,6 +666,21 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_cleaning_job_with_bedroom_snapshots: {
+        Args: {
+          p_property_id: string;
+          p_scheduled_date: string;
+          p_expected_start_time: string | null;
+          p_expected_start_time_window_end: string | null;
+          p_guest_arrival_deadline: string | null;
+          p_expected_duration_minutes: number;
+          p_cleaning_type: Database["public"]["Enums"]["cleaning_type"];
+          p_instructions: string;
+          p_notes: string;
+          p_required_configurations: Json;
+        };
+        Returns: string;
+      };
       current_user_can_manage_operations: {
         Args: Record<string, never>;
         Returns: boolean;

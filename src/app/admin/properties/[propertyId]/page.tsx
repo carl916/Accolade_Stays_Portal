@@ -1,9 +1,10 @@
-import { ArrowLeft, BedDouble, Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createBedroom, updateBedroom, updateProperty } from "@/lib/admin/property-actions";
+import { BedroomsSection } from "@/components/admin/BedroomsSection";
+import { FormSubmitButton } from "@/components/admin/FormSubmitButton";
+import { updateProperty } from "@/lib/admin/property-actions";
 import { requireRole } from "@/lib/auth/session";
-import { bedConfigurations, physicalBedTypes } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 
@@ -21,22 +22,16 @@ type PropertyDetailPageProps = {
   }>;
 };
 
-const configurationLabels = {
-  king: "King",
-  double: "Double",
-  two_singles: "Two singles",
-  single: "Single",
-  unmade: "Unmade",
-  other: "Other",
-  unknown: "Unknown"
-} satisfies Record<(typeof bedConfigurations)[number], string>;
-
-const bedTypeLabels = {
-  zip_and_link: "Zip-and-link",
-  fixed_double: "Fixed double",
-  fixed_single: "Fixed single",
-  other: "Other"
-} satisfies Record<(typeof physicalBedTypes)[number], string>;
+function hasPropertyMoreDetails(property: PropertyRow) {
+  return Boolean(
+    property.address_line_1 ||
+      property.address_line_2 ||
+      property.town ||
+      property.county ||
+      property.postcode ||
+      property.notes
+  );
+}
 
 export default async function PropertyDetailPage({ params, searchParams }: PropertyDetailPageProps) {
   await requireRole(["administrator"]);
@@ -58,15 +53,15 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
   const bedrooms = (bedroomData ?? []) as BedroomRow[];
 
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <section className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8">
+      <div className="flex flex-col gap-2">
+        <Link href="/admin/properties" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-moss">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Properties
+        </Link>
         <div>
-          <Link href="/admin/properties" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-moss">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Properties
-          </Link>
-          <h1 className="mt-3 text-3xl font-semibold text-brand-ink">{property.name}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
+          <h1 className="text-2xl font-semibold text-brand-ink sm:text-3xl">{property.name}</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-stone-600">
             Maintain property details and bedroom templates used when creating cleaning jobs.
           </p>
         </div>
@@ -78,24 +73,24 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
         </p>
       ) : null}
 
-      <form action={updateProperty} className="grid gap-4 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+      <form action={updateProperty} className="grid gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
         <input type="hidden" name="propertyId" value={property.id} />
         <div className="flex items-center gap-2">
-          <Save className="h-5 w-5 text-brand-moss" aria-hidden="true" />
+          <Save className="h-4 w-4 text-brand-moss" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-brand-ink">Property details</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="name">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="name">
             Name
             <input
               id="name"
               name="name"
               required
               defaultValue={property.name}
-              className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
             />
           </label>
-          <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="defaultCleaningDurationMinutes">
+          <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="defaultCleaningDurationMinutes">
             Default duration minutes
             <input
               id="defaultCleaningDurationMinutes"
@@ -104,174 +99,97 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
               min={1}
               required
               defaultValue={property.default_cleaning_duration_minutes}
-              className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
             />
           </label>
         </div>
-        <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="address">
-          Address
-          <textarea
-            id="address"
-            name="address"
-            rows={3}
-            defaultValue={property.address ?? ""}
-            className="rounded-md border border-stone-300 px-3 py-2 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-          />
-        </label>
-        <label className="grid gap-2 text-sm font-medium text-brand-ink" htmlFor="notes">
-          Notes
-          <textarea
-            id="notes"
-            name="notes"
-            rows={3}
-            defaultValue={property.notes}
-            className="rounded-md border border-stone-300 px-3 py-2 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-          />
-        </label>
-        <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-brand-ink">
-          <input
-            type="checkbox"
-            name="isActive"
-            defaultChecked={property.is_active}
-            className="h-5 w-5 rounded border-stone-300 text-brand-moss focus:ring-brand-moss"
-          />
-          Active property
-        </label>
-        <button
-          type="submit"
-          className="min-h-12 rounded-md bg-brand-moss px-4 text-base font-semibold text-white transition hover:bg-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2 sm:w-fit"
+
+        <details
+          open={hasPropertyMoreDetails(property)}
+          className="rounded-md border border-stone-200 bg-stone-50/40"
         >
-          Save property
-        </button>
+          <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-brand-moss outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2">
+            More details
+          </summary>
+          <div className="grid gap-3 border-t border-stone-200 p-3 md:grid-cols-2">
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="addressLine1">
+              Address Line 1
+              <input
+                id="addressLine1"
+                name="addressLine1"
+                defaultValue={property.address_line_1}
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="addressLine2">
+              Address Line 2
+              <input
+                id="addressLine2"
+                name="addressLine2"
+                defaultValue={property.address_line_2}
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="town">
+              Town
+              <input
+                id="town"
+                name="town"
+                defaultValue={property.town}
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="county">
+              County
+              <input
+                id="county"
+                name="county"
+                defaultValue={property.county}
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink" htmlFor="postcode">
+              Postcode
+              <input
+                id="postcode"
+                name="postcode"
+                defaultValue={property.postcode}
+                className="min-h-11 rounded-md border border-stone-300 px-3 text-base uppercase outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium text-brand-ink md:col-span-2" htmlFor="notes">
+              Notes
+              <textarea
+                id="notes"
+                name="notes"
+                rows={2}
+                defaultValue={property.notes}
+                className="rounded-md border border-stone-300 px-3 py-2 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
+              />
+            </label>
+          </div>
+        </details>
+
+        <div className="flex flex-col gap-3 border-t border-stone-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-brand-ink">
+            <input
+              type="checkbox"
+              name="isActive"
+              defaultChecked={property.is_active}
+              className="h-5 w-5 rounded border-stone-300 text-brand-moss focus:ring-brand-moss"
+            />
+            Active property
+          </label>
+          <div className="flex items-center gap-3 sm:justify-end">
+            <span className="text-sm text-stone-500">Saved</span>
+            <FormSubmitButton pendingLabel="Saving..." className="sm:w-auto">
+              Save changes
+            </FormSubmitButton>
+          </div>
+        </div>
       </form>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_24rem]">
-        <div className="grid gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-brand-ink">Bedrooms</h2>
-            <p className="mt-1 text-sm text-stone-600">Each bedroom keeps a current setup and permitted setup choices.</p>
-          </div>
-          {bedroomError ? (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-              {bedroomError.message}
-            </p>
-          ) : null}
-          {bedrooms.length === 0 ? (
-            <p className="rounded-lg border border-stone-200 bg-white p-4 text-sm text-stone-600">
-              No bedrooms have been added yet.
-            </p>
-          ) : null}
-          {bedrooms.map((bedroom) => (
-            <BedroomForm key={bedroom.id} propertyId={property.id} bedroom={bedroom} />
-          ))}
-        </div>
-        <BedroomForm propertyId={property.id} />
-      </div>
+      <BedroomsSection propertyId={property.id} bedrooms={bedrooms} errorMessage={bedroomError?.message} />
     </section>
-  );
-}
-
-function BedroomForm({ propertyId, bedroom }: { propertyId: string; bedroom?: BedroomRow }) {
-  const permitted = new Set(
-    bedroom?.bedroom_permitted_configurations.filter((item) => item.is_active).map((item) => item.configuration) ?? [
-      "unknown"
-    ]
-  );
-
-  return (
-    <form
-      action={bedroom ? updateBedroom : createBedroom}
-      className="grid h-fit gap-4 rounded-lg border border-stone-200 bg-white p-4 shadow-sm"
-    >
-      <input type="hidden" name="propertyId" value={propertyId} />
-      {bedroom ? <input type="hidden" name="bedroomId" value={bedroom.id} /> : null}
-      <div className="flex items-center gap-2">
-        <BedDouble className="h-5 w-5 text-brand-moss" aria-hidden="true" />
-        <h3 className="text-lg font-semibold text-brand-ink">{bedroom ? bedroom.name : "Add bedroom"}</h3>
-      </div>
-      <label className="grid gap-2 text-sm font-medium text-brand-ink">
-        Bedroom name
-        <input
-          name="name"
-          required
-          defaultValue={bedroom?.name ?? ""}
-          className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-        />
-      </label>
-      <label className="grid gap-2 text-sm font-medium text-brand-ink">
-        Physical bed type
-        <select
-          name="physicalBedType"
-          defaultValue={bedroom?.physical_bed_type ?? "zip_and_link"}
-          className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-        >
-          {physicalBedTypes.map((type) => (
-            <option key={type} value={type}>
-              {bedTypeLabels[type]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium text-brand-ink">
-          Default setup
-          <ConfigurationSelect name="defaultConfiguration" defaultValue={bedroom?.default_configuration ?? "unknown"} />
-        </label>
-        <label className="grid gap-2 text-sm font-medium text-brand-ink">
-          Current setup
-          <ConfigurationSelect name="currentConfiguration" defaultValue={bedroom?.current_configuration ?? "unknown"} />
-        </label>
-      </div>
-      <fieldset className="grid gap-2">
-        <legend className="text-sm font-medium text-brand-ink">Permitted configurations</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {bedConfigurations.map((configuration) => (
-            <label key={configuration} className="flex min-h-11 items-center gap-3 text-sm text-stone-700">
-              <input
-                type="checkbox"
-                name="permittedConfigurations"
-                value={configuration}
-                defaultChecked={permitted.has(configuration)}
-                className="h-5 w-5 rounded border-stone-300 text-brand-moss focus:ring-brand-moss"
-              />
-              {configurationLabels[configuration]}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      {bedroom ? (
-        <label className="flex min-h-11 items-center gap-3 text-sm font-medium text-brand-ink">
-          <input
-            type="checkbox"
-            name="isActive"
-            defaultChecked={bedroom.is_active}
-            className="h-5 w-5 rounded border-stone-300 text-brand-moss focus:ring-brand-moss"
-          />
-          Active bedroom
-        </label>
-      ) : null}
-      <button
-        type="submit"
-        className="min-h-12 rounded-md bg-brand-moss px-4 text-base font-semibold text-white transition hover:bg-brand-ink focus:outline-none focus:ring-2 focus:ring-brand-moss focus:ring-offset-2"
-      >
-        {bedroom ? "Save bedroom" : "Create bedroom"}
-      </button>
-    </form>
-  );
-}
-
-function ConfigurationSelect({ name, defaultValue }: { name: string; defaultValue: (typeof bedConfigurations)[number] }) {
-  return (
-    <select
-      name={name}
-      defaultValue={defaultValue}
-      className="min-h-12 rounded-md border border-stone-300 px-3 text-base outline-none focus:border-brand-moss focus:ring-2 focus:ring-brand-moss/20"
-    >
-      {bedConfigurations.map((configuration) => (
-        <option key={configuration} value={configuration}>
-          {configurationLabels[configuration]}
-        </option>
-      ))}
-    </select>
   );
 }
