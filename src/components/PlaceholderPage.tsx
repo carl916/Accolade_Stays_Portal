@@ -13,7 +13,7 @@ export function PlaceholderPage({ eyebrow, title, description, nextAction }: Pla
 
   return (
     <section className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
-      <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="rounded-lg border border-brand-border bg-brand-muted p-6 shadow-sm sm:p-8">
         <p className="text-sm font-semibold uppercase tracking-normal text-brand-moss">{eyebrow}</p>
         <h1 className="mt-3 text-3xl font-semibold text-brand-ink">{title}</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-stone-700">{description}</p>
