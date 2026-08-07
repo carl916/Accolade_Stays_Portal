@@ -31,7 +31,8 @@ function getFormString(formData: FormData, key: string) {
 }
 
 function redirectWithError(path: string, message: string): never {
-  redirect(`${path}?error=${encodeURIComponent(message)}`);
+  const separator = path.includes("?") ? "&" : "?";
+  redirect(`${path}${separator}error=${encodeURIComponent(message)}`);
 }
 
 function getRequiredConfigurations(formData: FormData) {
@@ -58,11 +59,14 @@ export async function createCleaningJob(formData: FormData) {
   if (scheduledDate) {
     errorPathSearchParams.set("scheduledDate", scheduledDate);
   }
+  if (getFormString(formData, "propertyLocked") === "1") {
+    errorPathSearchParams.set("propertyLocked", "1");
+  }
   const errorPath = `/admin/jobs?${errorPathSearchParams.toString()}`;
   const parsed = createCleaningJobSchema.safeParse({
     propertyId,
     scheduledDate,
-    guestArrivalDeadline: getFormString(formData, "guestArrivalDeadline") || null,
+    guestArrivalDeadline: getFormString(formData, "guestArrivalDeadline") || undefined,
     cleaningType: getFormString(formData, "cleaningType"),
     instructions: getFormString(formData, "instructions"),
     notes: getFormString(formData, "notes"),

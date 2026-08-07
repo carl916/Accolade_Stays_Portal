@@ -30,9 +30,27 @@ type AdminJobsPageProps = {
     addClean?: string;
     propertyId?: string;
     scheduledDate?: string;
+    propertyLocked?: string;
     error?: string;
   }>;
 };
+
+function getSafeDateParam(value: string | undefined) {
+  const match = value?.match(/^\d{4}-\d{2}-\d{2}/);
+
+  return match?.[0];
+}
+
+function getRecoveredError(params: Awaited<AdminJobsPageProps["searchParams"]>) {
+  if (params?.error) {
+    return params.error;
+  }
+
+  const scheduledDate = params?.scheduledDate;
+  const embeddedError = scheduledDate?.match(/[?&]error=([^&]+)/)?.[1];
+
+  return embeddedError ? decodeURIComponent(embeddedError.replace(/\+/g, " ")) : undefined;
+}
 
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
   await requireRole(["administrator"]);
@@ -80,11 +98,12 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
       ) : null}
 
       <JobsCalendarClient
-        initialError={resolvedSearchParams?.error}
+        initialError={getRecoveredError(resolvedSearchParams)}
         initialModal={{
-          isOpen: resolvedSearchParams?.addClean === "1" || Boolean(resolvedSearchParams?.error),
-          scheduledDate: resolvedSearchParams?.scheduledDate,
-          propertyId: resolvedSearchParams?.propertyId
+          isOpen: resolvedSearchParams?.addClean === "1" || Boolean(getRecoveredError(resolvedSearchParams)),
+          scheduledDate: getSafeDateParam(resolvedSearchParams?.scheduledDate),
+          propertyId: resolvedSearchParams?.propertyId,
+          propertyLocked: resolvedSearchParams?.propertyLocked === "1"
         }}
         properties={properties.map((property) => ({
           id: property.id,

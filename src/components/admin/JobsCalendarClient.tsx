@@ -59,6 +59,7 @@ type JobsCalendarClientProps = {
     isOpen: boolean;
     scheduledDate?: string;
     propertyId?: string;
+    propertyLocked?: boolean;
   };
 };
 
@@ -149,7 +150,7 @@ function getBedSetupSummary(property: PropertyOption | null) {
 
 export function JobsCalendarClient({ properties, jobs, initialError, initialModal }: JobsCalendarClientProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
-  const [propertyFilter, setPropertyFilter] = useState(initialModal?.propertyId ?? allPropertiesValue);
+  const [propertyFilter, setPropertyFilter] = useState(allPropertiesValue);
   const [addCleanDraft, setAddCleanDraft] = useState<AddCleanDraft | null>(() => {
     if (!initialModal?.isOpen) {
       return null;
@@ -160,7 +161,7 @@ export function JobsCalendarClient({ properties, jobs, initialError, initialModa
     return {
       scheduledDate: initialModal.scheduledDate ?? toDateInputValue(new Date()),
       propertyId,
-      propertyLocked: Boolean(propertyId)
+      propertyLocked: Boolean(initialModal.propertyLocked && propertyId)
     };
   });
   const [requiredConfigurations, setRequiredConfigurations] = useState<Record<string, BedConfiguration>>({});
@@ -420,6 +421,7 @@ export function JobsCalendarClient({ properties, jobs, initialError, initialModa
                     {selectedProperty.name}
                   </div>
                   <input type="hidden" name="propertyId" value={selectedProperty.id} />
+                  <input type="hidden" name="propertyLocked" value="1" />
                 </div>
               ) : (
                 <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
