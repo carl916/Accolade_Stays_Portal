@@ -7,12 +7,14 @@ import {
   canManageSettings,
   canTransitionCleaningJobStatus,
   cleaningTypes,
+  defaultGuestCheckInTime,
   formatBedConfiguration,
   formatCleaningDurationForClean,
   formatCleaningDurationForPropertyCard,
   formatCleaningDurationForPropertyDetail,
   formatCleaningDurationOption,
   getBedConfigurationAction,
+  getDefaultGuestArrivalDeadlineIso,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
@@ -129,6 +131,17 @@ describe("operations domain rules", () => {
     expect(formatCleaningDurationForClean(180)).toBe("3 hour clean");
     expect(supportedCleaningDurationSchema.safeParse("150").success).toBe(true);
     expect(supportedCleaningDurationSchema.safeParse("125").success).toBe(false);
+  });
+
+  it("keeps the normal guest arrival deadline at the default check-in time", () => {
+    const deadline = new Date(getDefaultGuestArrivalDeadlineIso("2026-08-07"));
+
+    expect(defaultGuestCheckInTime).toBe("16:00");
+    expect(deadline.getFullYear()).toBe(2026);
+    expect(deadline.getMonth()).toBe(7);
+    expect(deadline.getDate()).toBe(7);
+    expect(deadline.getHours()).toBe(16);
+    expect(deadline.getMinutes()).toBe(0);
   });
 
   it("seeds the configurable MVP linen items", () => {

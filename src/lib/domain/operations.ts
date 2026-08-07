@@ -46,6 +46,7 @@ export const longCleanReasons = [
 ] as const;
 
 export const supportedCleaningDurations = [120, 150, 180] as const;
+export const defaultGuestCheckInTime = "16:00";
 
 export type AppRole = (typeof appRoles)[number];
 export type CleaningJobStatus = (typeof cleaningJobStatuses)[number];
@@ -220,6 +221,10 @@ export function formatCleaningDurationForClean(minutes: number) {
 
 export function isSupportedCleaningDuration(minutes: number): minutes is SupportedCleaningDuration {
   return supportedCleaningDurations.includes(minutes as SupportedCleaningDuration);
+}
+
+export function getDefaultGuestArrivalDeadlineIso(scheduledDate: string) {
+  return new Date(`${scheduledDate}T${defaultGuestCheckInTime}:00`).toISOString();
 }
 
 export function requiresReviewForFinalBedConfiguration(args: {
