@@ -10,6 +10,7 @@ export type Database = {
           full_name: string;
           mobile_number: string | null;
           role: Database["public"]["Enums"]["app_role"];
+          cleaner_type: Database["public"]["Enums"]["cleaner_type"] | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -20,6 +21,7 @@ export type Database = {
           full_name: string;
           mobile_number?: string | null;
           role?: Database["public"]["Enums"]["app_role"];
+          cleaner_type?: Database["public"]["Enums"]["cleaner_type"] | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -30,6 +32,7 @@ export type Database = {
           full_name?: string;
           mobile_number?: string | null;
           role?: Database["public"]["Enums"]["app_role"];
+          cleaner_type?: Database["public"]["Enums"]["cleaner_type"] | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -200,46 +203,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      cleaning_resources: {
-        Row: {
-          id: string;
-          name: string;
-          resource_type: Database["public"]["Enums"]["cleaning_resource_type"];
-          labour_multiplier: number;
-          primary_user_id: string | null;
-          is_active: boolean;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          resource_type?: Database["public"]["Enums"]["cleaning_resource_type"];
-          labour_multiplier?: number;
-          primary_user_id?: string | null;
-          is_active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          resource_type?: Database["public"]["Enums"]["cleaning_resource_type"];
-          labour_multiplier?: number;
-          primary_user_id?: string | null;
-          is_active?: boolean;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "cleaning_resources_primary_user_id_fkey";
-            columns: ["primary_user_id"];
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
       cleaning_jobs: {
         Row: {
           id: string;
@@ -253,10 +216,9 @@ export type Database = {
           status: Database["public"]["Enums"]["cleaning_job_status"];
           cleaning_manager_id: string | null;
           assigned_cleaner_id: string | null;
-          assigned_cleaning_resource_id: string | null;
-          assigned_cleaning_resource_name: string | null;
-          assigned_cleaning_resource_type: Database["public"]["Enums"]["cleaning_resource_type"] | null;
-          assigned_cleaning_resource_labour_multiplier: number | null;
+          assigned_cleaner_name: string | null;
+          assigned_cleaner_type: Database["public"]["Enums"]["cleaner_type"] | null;
+          assigned_cleaner_labour_multiplier: number | null;
           created_by: string | null;
           approved_by: string | null;
           assigned_at: string | null;
@@ -267,7 +229,7 @@ export type Database = {
           started_at: string | null;
           completed_at: string | null;
           actual_duration_minutes: number | null;
-          working_mode: Database["public"]["Enums"]["cleaning_resource_working_mode"] | null;
+          working_mode: Database["public"]["Enums"]["cleaner_working_mode"] | null;
           effective_labour_multiplier: number | null;
           actual_labour_minutes: number | null;
           is_long_clean: boolean;
@@ -297,10 +259,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["cleaning_job_status"];
           cleaning_manager_id?: string | null;
           assigned_cleaner_id?: string | null;
-          assigned_cleaning_resource_id?: string | null;
-          assigned_cleaning_resource_name?: string | null;
-          assigned_cleaning_resource_type?: Database["public"]["Enums"]["cleaning_resource_type"] | null;
-          assigned_cleaning_resource_labour_multiplier?: number | null;
+          assigned_cleaner_name?: string | null;
+          assigned_cleaner_type?: Database["public"]["Enums"]["cleaner_type"] | null;
+          assigned_cleaner_labour_multiplier?: number | null;
           created_by?: string | null;
           approved_by?: string | null;
           assigned_at?: string | null;
@@ -311,7 +272,7 @@ export type Database = {
           started_at?: string | null;
           completed_at?: string | null;
           actual_duration_minutes?: number | null;
-          working_mode?: Database["public"]["Enums"]["cleaning_resource_working_mode"] | null;
+          working_mode?: Database["public"]["Enums"]["cleaner_working_mode"] | null;
           effective_labour_multiplier?: number | null;
           actual_labour_minutes?: number | null;
           is_long_clean?: boolean;
@@ -341,10 +302,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["cleaning_job_status"];
           cleaning_manager_id?: string | null;
           assigned_cleaner_id?: string | null;
-          assigned_cleaning_resource_id?: string | null;
-          assigned_cleaning_resource_name?: string | null;
-          assigned_cleaning_resource_type?: Database["public"]["Enums"]["cleaning_resource_type"] | null;
-          assigned_cleaning_resource_labour_multiplier?: number | null;
+          assigned_cleaner_name?: string | null;
+          assigned_cleaner_type?: Database["public"]["Enums"]["cleaner_type"] | null;
+          assigned_cleaner_labour_multiplier?: number | null;
           created_by?: string | null;
           approved_by?: string | null;
           assigned_at?: string | null;
@@ -355,7 +315,7 @@ export type Database = {
           started_at?: string | null;
           completed_at?: string | null;
           actual_duration_minutes?: number | null;
-          working_mode?: Database["public"]["Enums"]["cleaning_resource_working_mode"] | null;
+          working_mode?: Database["public"]["Enums"]["cleaner_working_mode"] | null;
           effective_labour_multiplier?: number | null;
           actual_labour_minutes?: number | null;
           is_long_clean?: boolean;
@@ -384,12 +344,6 @@ export type Database = {
             foreignKeyName: "cleaning_jobs_assigned_cleaner_id_fkey";
             columns: ["assigned_cleaner_id"];
             referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "cleaning_jobs_assigned_cleaning_resource_id_fkey";
-            columns: ["assigned_cleaning_resource_id"];
-            referencedRelation: "cleaning_resources";
             referencedColumns: ["id"];
           },
           {
@@ -1218,8 +1172,8 @@ export type Database = {
         | "completed"
         | "requires_review"
         | "cancelled";
-      cleaning_resource_type: "individual" | "pair";
-      cleaning_resource_working_mode: "as_assigned" | "solo";
+      cleaner_type: "individual" | "pair";
+      cleaner_working_mode: "as_pair" | "solo";
       cleaning_type: "standard_changeover" | "mid_stay_clean" | "deep_or_remedial_clean" | "other";
       exception_review_status: "open" | "in_review" | "resolved" | "dismissed";
       job_bedroom_completion_status: "pending" | "confirmed" | "requires_review";

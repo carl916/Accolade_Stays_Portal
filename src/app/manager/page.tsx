@@ -21,9 +21,9 @@ type QueueJobRow = Pick<
   | "guest_arrival_deadline"
   | "expected_duration_minutes"
   | "status"
-  | "assigned_cleaning_resource_id"
-  | "assigned_cleaning_resource_name"
-  | "assigned_cleaning_resource_labour_multiplier"
+  | "assigned_cleaner_id"
+  | "assigned_cleaner_name"
+  | "assigned_cleaner_labour_multiplier"
   | "requires_review"
   | "booking_change_requires_review"
   | "booking_change_reason"
@@ -84,10 +84,10 @@ function QueueCard({ job, actionLabel }: { job: QueueJobRow; actionLabel: string
   const changedBedrooms = getChangedBedrooms(job);
   const firstChange = changedBedrooms[0];
   const nextArrivalTime = formatDeadlineTime(job.guest_arrival_deadline);
-  const expectedWorkingMinutes = job.assigned_cleaning_resource_labour_multiplier
+  const expectedWorkingMinutes = job.assigned_cleaner_labour_multiplier
     ? calculateExpectedElapsedMinutes({
         expectedLabourMinutes: job.expected_duration_minutes,
-        labourMultiplier: job.assigned_cleaning_resource_labour_multiplier
+        labourMultiplier: job.assigned_cleaner_labour_multiplier
       })
     : null;
 
@@ -101,7 +101,7 @@ function QueueCard({ job, actionLabel }: { job: QueueJobRow; actionLabel: string
         <span className="inline-flex w-fit rounded-md bg-brand-muted px-2.5 py-1 text-xs font-semibold text-brand-darkSlate">
           {getCleaningJobStatusLabel({
             status: job.status,
-            assignedResourceName: job.assigned_cleaning_resource_name,
+            assignedCleanerName: job.assigned_cleaner_name,
             requiresReview: job.requires_review,
             bookingChangeRequiresReview: job.booking_change_requires_review
           })}
@@ -206,7 +206,7 @@ export default async function ManagerPage() {
   const { data, error } = await supabase
     .from("cleaning_jobs")
     .select(
-      "id,scheduled_date,expected_start_time,guest_arrival_deadline,expected_duration_minutes,status,assigned_cleaning_resource_id,assigned_cleaning_resource_name,assigned_cleaning_resource_labour_multiplier,requires_review,booking_change_requires_review,booking_change_reason,properties(name),smoobu_bookings(check_out_time),cleaning_job_bedrooms(id,bedroom_name,assumed_current_configuration,required_configuration)"
+      "id,scheduled_date,expected_start_time,guest_arrival_deadline,expected_duration_minutes,status,assigned_cleaner_id,assigned_cleaner_name,assigned_cleaner_labour_multiplier,requires_review,booking_change_requires_review,booking_change_reason,properties(name),smoobu_bookings(check_out_time),cleaning_job_bedrooms(id,bedroom_name,assumed_current_configuration,required_configuration)"
     )
     .neq("status", "cancelled")
     .order("scheduled_date", { ascending: true });
@@ -221,7 +221,7 @@ export default async function ManagerPage() {
     )
     .slice(0, 8);
   const needsCleanerJobs = jobs
-    .filter((job) => job.status === "awaiting_cleaner_response" && !job.assigned_cleaning_resource_id)
+    .filter((job) => job.status === "awaiting_cleaner_response" && !job.assigned_cleaner_id)
     .slice(0, 8);
   const upcomingJobs = jobs
     .filter(
@@ -229,7 +229,7 @@ export default async function ManagerPage() {
         job.scheduled_date >= todayValue &&
         job.status !== "awaiting_approval" &&
         job.status !== "completed" &&
-        (job.assigned_cleaning_resource_id || job.status === "awaiting_cleaner_response")
+        (job.assigned_cleaner_id || job.status === "awaiting_cleaner_response")
     )
     .slice(0, 10);
 
@@ -239,7 +239,7 @@ export default async function ManagerPage() {
         <p className="text-sm font-semibold uppercase tracking-normal text-brand-moss">Cleaning manager</p>
         <h1 className="mt-2 text-3xl font-semibold text-brand-ink">Work queue</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
-          Signed in as {profile.full_name}. Review cleans, confirm the setup, and assign cleaner / team resources.
+          Signed in as {profile.full_name}. Review cleans, confirm the setup, and assign cleaners.
         </p>
       </div>
 
@@ -261,7 +261,7 @@ export default async function ManagerPage() {
         icon={<UserCheck className="h-5 w-5 text-brand-moss" aria-hidden="true" />}
         jobs={needsCleanerJobs}
         actionLabel="Assign team"
-        emptyText="No confirmed cleans are waiting for a cleaner / team."
+        emptyText="No confirmed cleans are waiting for a cleaner."
       />
       <QueueSection
         title="Upcoming"

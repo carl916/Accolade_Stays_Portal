@@ -42,7 +42,7 @@ const updateCleaningJobReviewSchema = jobMutationSchema.extend({
   requiredConfigurations: z.record(z.string().uuid(), bedConfigurationSchema)
 });
 const assignCleanerSchema = jobMutationSchema.extend({
-  cleaningResourceId: z.string().uuid().optional()
+  cleanerId: z.string().uuid().optional()
 });
 const addCommentSchema = jobMutationSchema.extend({
   comment: z.string().trim().min(1, "Add a comment before posting.").max(2000, "Keep comments under 2000 characters.")
@@ -402,7 +402,7 @@ export async function assignCleanerToJob(formData: FormData) {
   const parsed = assignCleanerSchema.safeParse({
     jobId: getFormString(formData, "jobId"),
     returnPath: getSafeReturnPath(getFormString(formData, "returnPath")),
-    cleaningResourceId: getFormString(formData, "cleaningResourceId") || getFormString(formData, "cleanerId") || undefined
+    cleanerId: getFormString(formData, "cleanerId") || undefined
   });
   const returnPath = parsed.success ? parsed.data.returnPath : getSafeReturnPath(getFormString(formData, "returnPath"));
 
@@ -413,12 +413,12 @@ export async function assignCleanerToJob(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const { data: jobData, error: jobError } = await supabase
     .from("cleaning_jobs")
-    .select("id,status,assigned_cleaner_id,assigned_cleaning_resource_id,started_at")
+    .select("id,status,assigned_cleaner_id,started_at")
     .eq("id", parsed.data.jobId)
     .maybeSingle();
   const job = jobData as Pick<
     Database["public"]["Tables"]["cleaning_jobs"]["Row"],
-    "id" | "status" | "assigned_cleaner_id" | "assigned_cleaning_resource_id" | "started_at"
+    "id" | "status" | "assigned_cleaner_id" | "started_at"
   > | null;
 
   if (jobError || !job) {
@@ -433,59 +433,48 @@ export async function assignCleanerToJob(formData: FormData) {
     redirectWithError(returnPath, "Cleans that have already started cannot be reassigned here.");
   }
 
-  let cleaningResource:
+  let cleaner:
     | Pick<
-        Database["public"]["Tables"]["cleaning_resources"]["Row"],
-        "id" | "name" | "resource_type" | "labour_multiplier" | "primary_user_id" | "is_active"
+        Database["public"]["Tables"]["profiles"]["Row"],
+        "id" | "full_name" | "role" | "cleaner_type" | "is_active"
       >
     | null = null;
 
-  if (parsed.data.cleaningResourceId) {
-    const { data: resourceData, error: resourceError } = await supabase
-      .from("cleaning_resources")
-      .select("id,name,resource_type,labour_multiplier,primary_user_id,is_active")
-      .eq("id", parsed.data.cleaningResourceId)
-      .eq("is_active", true)
-      .maybeSingle();
-    const resource = resourceData as Pick<
-      Database["public"]["Tables"]["cleaning_resources"]["Row"],
-      "id" | "name" | "resource_type" | "labour_multiplier" | "primary_user_id" | "is_active"
-    > | null;
-
-    if (resourceError || !resource) {
-      redirectWithError(returnPath, resourceError?.message ?? "Choose an active cleaner or team.");
-    }
-
-    if (!resource.primary_user_id) {
-      redirectWithError(returnPath, "Choose a cleaner or team with a primary login.");
-    }
-
-    const { data: primaryUserData, error: primaryUserError } = await supabase
+  if (parsed.data.cleanerId) {
+    const { data: cleanerData, error: cleanerError } = await supabase
       .from("profiles")
-      .select("id,role,is_active")
-      .eq("id", resource.primary_user_id)
+      .select("id,full_name,role,cleaner_type,is_active")
+      .eq("id", parsed.data.cleanerId)
       .eq("role", "cleaner")
       .eq("is_active", true)
       .maybeSingle();
+    const cleanerProfile = cleanerData as Pick<
+      Database["public"]["Tables"]["profiles"]["Row"],
+      "id" | "full_name" | "role" | "cleaner_type" | "is_active"
+    > | null;
 
-    if (primaryUserError || !primaryUserData) {
-      redirectWithError(returnPath, primaryUserError?.message ?? "The selected resource needs an active cleaner login.");
+    if (cleanerError || !cleanerProfile) {
+      redirectWithError(returnPath, cleanerError?.message ?? "Choose an active cleaner.");
     }
 
-    cleaningResource = resource;
+    if (!cleanerProfile.cleaner_type) {
+      redirectWithError(returnPath, "The selected cleaner needs a cleaner type.");
+    }
+
+    cleaner = cleanerProfile;
   }
+  const cleanerLabourMultiplier = cleaner?.cleaner_type === "pair" ? 2 : cleaner ? 1 : null;
 
   const { error } = await supabase
     .from("cleaning_jobs")
     .update({
-      assigned_cleaning_resource_id: cleaningResource?.id ?? null,
-      assigned_cleaning_resource_name: cleaningResource?.name ?? null,
-      assigned_cleaning_resource_type: cleaningResource?.resource_type ?? null,
-      assigned_cleaning_resource_labour_multiplier: cleaningResource?.labour_multiplier ?? null,
-      assigned_cleaner_id: cleaningResource?.primary_user_id ?? null,
-      assigned_at: cleaningResource ? new Date().toISOString() : null,
+      assigned_cleaner_id: cleaner?.id ?? null,
+      assigned_cleaner_name: cleaner?.full_name ?? null,
+      assigned_cleaner_type: cleaner?.cleaner_type ?? null,
+      assigned_cleaner_labour_multiplier: cleanerLabourMultiplier,
+      assigned_at: cleaner ? new Date().toISOString() : null,
       working_mode: null,
-      effective_labour_multiplier: cleaningResource?.labour_multiplier ?? null,
+      effective_labour_multiplier: cleanerLabourMultiplier,
       status: job.status === "awaiting_approval" ? "awaiting_cleaner_response" : job.status
     } as never)
     .eq("id", parsed.data.jobId);
@@ -497,27 +486,24 @@ export async function assignCleanerToJob(formData: FormData) {
   await recordJobAuditEvent({
     jobId: parsed.data.jobId,
     userId: profile.id,
-    action: cleaningResource ? "cleaning_resource_assigned" : "cleaning_resource_unassigned",
+    action: cleaner ? "cleaner_assigned" : "cleaner_unassigned",
     previousValue: {
-      assigned_cleaner_id: job.assigned_cleaner_id,
-      assigned_cleaning_resource_id: job.assigned_cleaning_resource_id
+      assigned_cleaner_id: job.assigned_cleaner_id
     },
-    newValue: cleaningResource
+    newValue: cleaner
       ? {
-          assigned_cleaning_resource_id: cleaningResource.id,
-          cleaning_resource_name: cleaningResource.name,
-          cleaning_resource_type: cleaningResource.resource_type,
-          labour_multiplier: cleaningResource.labour_multiplier,
-          primary_user_id: cleaningResource.primary_user_id
+          assigned_cleaner_id: cleaner.id,
+          cleaner_name: cleaner.full_name,
+          cleaner_type: cleaner.cleaner_type,
+          labour_multiplier: cleanerLabourMultiplier
         }
       : {
-          assigned_cleaning_resource_id: null,
           assigned_cleaner_id: null
         }
   });
 
   revalidateJobViews(parsed.data.jobId);
-  redirectWithSuccess(returnPath, cleaningResource ? "Cleaner / team assigned." : "Cleaner / team removed.");
+  redirectWithSuccess(returnPath, cleaner ? "Cleaner assigned." : "Cleaner removed.");
 }
 
 export async function addCleaningJobComment(formData: FormData) {

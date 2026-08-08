@@ -15,8 +15,8 @@ type CleaningJobRow = Pick<
   | "expected_start_time"
   | "status"
   | "cleaning_type"
-  | "assigned_cleaning_resource_id"
-  | "assigned_cleaning_resource_name"
+  | "assigned_cleaner_id"
+  | "assigned_cleaner_name"
   | "completed_at"
   | "requires_review"
   | "smoobu_booking_id"
@@ -146,7 +146,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     supabase
       .from("cleaning_jobs")
       .select(
-        "id,property_id,scheduled_date,expected_start_time,status,cleaning_type,assigned_cleaning_resource_id,assigned_cleaning_resource_name,completed_at,requires_review,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name)"
+        "id,property_id,scheduled_date,expected_start_time,status,cleaning_type,assigned_cleaner_id,assigned_cleaner_name,completed_at,requires_review,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name)"
       )
       .order("scheduled_date", { ascending: true }),
     supabase
@@ -296,7 +296,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
           expectedStartTime: job.expected_start_time,
           cleaningType: job.cleaning_type,
           status: job.status,
-          assignedResourceName: job.assigned_cleaning_resource_name,
+          assignedCleanerName: job.assigned_cleaner_name,
           completedAt: job.completed_at,
           requiresReview: job.requires_review,
           bookingId: job.smoobu_booking_id,

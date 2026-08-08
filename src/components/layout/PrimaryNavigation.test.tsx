@@ -22,6 +22,7 @@ const administratorProfile = {
   full_name: "Carl Gilbert",
   mobile_number: null,
   role: "administrator",
+  cleaner_type: null,
   is_active: true,
   created_at: "2026-08-06T00:00:00.000Z",
   updated_at: "2026-08-06T00:00:00.000Z"

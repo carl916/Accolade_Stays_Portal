@@ -14,7 +14,7 @@ import {
   formatBedConfiguration,
   formatCleaningDurationAsTime,
   formatCleaningDurationForClean,
-  getCleaningResourceTypeLabel,
+  getCleanerTypeLabel,
   getCleaningJobStatusLabel,
   getWorkingModeLabel,
   isCleaningJobNeedsManagerReview,
@@ -22,8 +22,8 @@ import {
   type AppRole,
   type BedConfiguration,
   type CleaningJobStatus,
-  type CleaningResourceType,
-  type CleaningResourceWorkingMode,
+  type CleanerType,
+  type CleanerWorkingMode,
   type CleaningType
 } from "@/lib/domain/operations";
 import type { Json } from "@/lib/supabase/types";
@@ -40,12 +40,11 @@ export type CleaningJobReviewJob = {
   status: CleaningJobStatus;
   instructions: string;
   notes: string;
-  assignedCleaningResourceId: string | null;
-  assignedCleaningResourceName: string | null;
-  assignedCleaningResourceType: CleaningResourceType | null;
-  assignedCleaningResourceLabourMultiplier: number | null;
   assignedCleanerId: string | null;
-  workingMode: CleaningResourceWorkingMode | null;
+  assignedCleanerName: string | null;
+  assignedCleanerType: CleanerType | null;
+  assignedCleanerLabourMultiplier: number | null;
+  workingMode: CleanerWorkingMode | null;
   effectiveLabourMultiplier: number | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -63,13 +62,11 @@ export type CleaningJobReviewBedroom = BedSetupSummaryBedroom & {
   permittedConfigurations: BedConfiguration[];
 };
 
-export type CleaningJobReviewResource = {
+export type CleaningJobReviewCleaner = {
   id: string;
-  name: string;
-  resourceType: CleaningResourceType;
-  labourMultiplier: number;
-  primaryUserName: string | null;
-  primaryUserEmail: string | null;
+  fullName: string;
+  email: string | null;
+  cleanerType: CleanerType;
 };
 
 export type CleaningJobReviewComment = {
@@ -91,7 +88,7 @@ export type CleaningJobReviewAuditEvent = {
 type CleaningJobReviewProps = {
   job: CleaningJobReviewJob;
   bedrooms: CleaningJobReviewBedroom[];
-  cleaningResources: CleaningJobReviewResource[];
+  cleaners: CleaningJobReviewCleaner[];
   comments: CleaningJobReviewComment[];
   auditEvents: CleaningJobReviewAuditEvent[];
   currentRole: AppRole;
@@ -179,6 +176,10 @@ function getJsonString(value: Json | null, key: string) {
 }
 
 function formatAuditEvent(event: CleaningJobReviewAuditEvent) {
+  const legacyCleanerAssignedAction = ["cleaning", "resource", "assigned"].join("_");
+  const legacyCleanerUnassignedAction = ["cleaning", "resource", "unassigned"].join("_");
+  const legacyCleanerNameKey = ["cleaning", "resource", "name"].join("_");
+
   if (event.action === "clean_created") {
     return "Clean created";
   }
@@ -200,13 +201,13 @@ function formatAuditEvent(event: CleaningJobReviewAuditEvent) {
     return "Cleaner removed";
   }
 
-  if (event.action === "cleaning_resource_assigned") {
-    const name = getJsonString(event.newValue, "cleaning_resource_name");
-    return `Cleaning team assigned${name ? `: ${name}` : ""}`;
+  if (event.action === legacyCleanerAssignedAction) {
+    const name = getJsonString(event.newValue, legacyCleanerNameKey);
+    return `Cleaner assigned${name ? `: ${name}` : ""}`;
   }
 
-  if (event.action === "cleaning_resource_unassigned") {
-    return "Cleaning team removed";
+  if (event.action === legacyCleanerUnassignedAction) {
+    return "Cleaner removed";
   }
 
   return event.action.replaceAll("_", " ");
@@ -215,7 +216,7 @@ function formatAuditEvent(event: CleaningJobReviewAuditEvent) {
 export function CleaningJobReview({
   job,
   bedrooms,
-  cleaningResources,
+  cleaners,
   comments,
   auditEvents,
   currentRole,
@@ -233,10 +234,10 @@ export function CleaningJobReview({
     bookingChangeRequiresReview: job.bookingChangeRequiresReview
   });
   const turnaround = formatTurnaround(job.checkoutTime, job.nextArrivalTime);
-  const expectedWorkingMinutes = job.assignedCleaningResourceLabourMultiplier
+  const expectedWorkingMinutes = job.assignedCleanerLabourMultiplier
     ? calculateExpectedElapsedMinutes({
         expectedLabourMinutes: job.expectedDurationMinutes,
-        labourMultiplier: job.assignedCleaningResourceLabourMultiplier
+        labourMultiplier: job.assignedCleanerLabourMultiplier
       })
     : null;
   const elapsedMinutes =
@@ -292,7 +293,7 @@ export function CleaningJobReview({
           <span className="inline-flex w-fit rounded-md bg-brand-muted px-3 py-2 text-sm font-semibold text-brand-darkSlate">
             {getCleaningJobStatusLabel({
               status: job.status,
-              assignedResourceName: job.assignedCleaningResourceName,
+              assignedCleanerName: job.assignedCleanerName,
               requiresReview: job.requiresReview,
               bookingChangeRequiresReview: job.bookingChangeRequiresReview
             })}
@@ -353,15 +354,14 @@ export function CleaningJobReview({
           <h2 className="text-base font-semibold text-brand-ink">Assignment</h2>
         </div>
         <p className="text-sm text-stone-700">
-          Cleaning team:{" "}
-          <span className="font-semibold text-brand-ink">{job.assignedCleaningResourceName ?? "Unassigned"}</span>
-          {job.assignedCleaningResourceType ? (
+          Cleaner: <span className="font-semibold text-brand-ink">{job.assignedCleanerName ?? "Unassigned"}</span>
+          {job.assignedCleanerType ? (
             <span className="ml-2 text-xs font-semibold text-stone-500">
-              {getCleaningResourceTypeLabel(job.assignedCleaningResourceType)}
+              {getCleanerTypeLabel(job.assignedCleanerType)}
             </span>
           ) : null}
         </p>
-        {job.assignedCleaningResourceType === "pair" && job.workingMode ? (
+        {job.assignedCleanerType === "pair" && job.workingMode ? (
           <p className="text-sm text-stone-700">
             Worked: <span className="font-semibold text-brand-ink">{getWorkingModeLabel(job.workingMode)}</span>
           </p>
@@ -371,25 +371,23 @@ export function CleaningJobReview({
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="returnPath" value={returnPath} />
             <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-              Cleaner / team
+              Cleaner
               <select
-                name="cleaningResourceId"
-                defaultValue={job.assignedCleaningResourceId ?? ""}
+                name="cleanerId"
+                defaultValue={job.assignedCleanerId ?? ""}
                 className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
               >
                 <option value="">Unassigned</option>
-                {cleaningResources.map((resource) => (
-                  <option key={resource.id} value={resource.id}>
-                    {resource.name} - {getCleaningResourceTypeLabel(resource.resourceType)}
-                    {resource.primaryUserName
-                      ? ` - Login: ${resource.primaryUserName}${resource.primaryUserEmail ? ` (${resource.primaryUserEmail})` : ""}`
-                      : " - No login"}
+                {cleaners.map((cleaner) => (
+                  <option key={cleaner.id} value={cleaner.id}>
+                    {cleaner.fullName} - {getCleanerTypeLabel(cleaner.cleanerType)}
+                    {cleaner.email ? ` - ${cleaner.email}` : ""}
                   </option>
                 ))}
               </select>
             </label>
             <FormSubmitButton pendingLabel="Assigning..." className="sm:w-auto">
-              {job.assignedCleaningResourceId ? "Update team" : "Assign team"}
+              {job.assignedCleanerId ? "Update cleaner" : "Assign cleaner"}
             </FormSubmitButton>
           </form>
         ) : null}

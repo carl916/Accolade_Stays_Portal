@@ -6,7 +6,7 @@ import {
   CleaningJobReview,
   type CleaningJobReviewAuditEvent,
   type CleaningJobReviewBedroom,
-  type CleaningJobReviewResource,
+  type CleaningJobReviewCleaner,
   type CleaningJobReviewComment
 } from "@/components/cleaning/CleaningJobReview";
 
@@ -21,11 +21,10 @@ type JobRow = Pick<
   | "status"
   | "instructions"
   | "notes"
-  | "assigned_cleaning_resource_id"
-  | "assigned_cleaning_resource_name"
-  | "assigned_cleaning_resource_type"
-  | "assigned_cleaning_resource_labour_multiplier"
   | "assigned_cleaner_id"
+  | "assigned_cleaner_name"
+  | "assigned_cleaner_type"
+  | "assigned_cleaner_labour_multiplier"
   | "working_mode"
   | "effective_labour_multiplier"
   | "started_at"
@@ -37,6 +36,7 @@ type JobRow = Pick<
   | "booking_change_reason"
 > & {
   properties: Pick<Database["public"]["Tables"]["properties"]["Row"], "name"> | null;
+  assigned_cleaner: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name" | "cleaner_type"> | null;
   smoobu_bookings: Pick<Database["public"]["Tables"]["smoobu_bookings"]["Row"], "check_out_time" | "guest_name"> | null;
 };
 type JobBedroomRow = Pick<
@@ -51,12 +51,7 @@ type JobBedroomRow = Pick<
   } | null;
 };
 type NextBookingRow = Pick<Database["public"]["Tables"]["smoobu_bookings"]["Row"], "guest_name" | "check_in_time">;
-type CleaningResourceRow = Pick<
-  Database["public"]["Tables"]["cleaning_resources"]["Row"],
-  "id" | "name" | "resource_type" | "labour_multiplier" | "primary_user_id"
-> & {
-  primary_user: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name" | "email"> | null;
-};
+type CleanerRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "full_name" | "email" | "cleaner_type">;
 type CommentRow = Pick<Database["public"]["Tables"]["cleaning_job_comments"]["Row"], "id" | "body" | "created_at"> & {
   author: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name"> | null;
 };
@@ -97,7 +92,7 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
   const { data: jobData } = await supabase
     .from("cleaning_jobs")
     .select(
-      "id,property_id,scheduled_date,expected_start_time,expected_duration_minutes,cleaning_type,status,instructions,notes,assigned_cleaning_resource_id,assigned_cleaning_resource_name,assigned_cleaning_resource_type,assigned_cleaning_resource_labour_multiplier,assigned_cleaner_id,working_mode,effective_labour_multiplier,started_at,completed_at,actual_duration_minutes,actual_labour_minutes,requires_review,booking_change_requires_review,booking_change_reason,properties(name),smoobu_bookings(check_out_time,guest_name)"
+      "id,property_id,scheduled_date,expected_start_time,expected_duration_minutes,cleaning_type,status,instructions,notes,assigned_cleaner_id,assigned_cleaner_name,assigned_cleaner_type,assigned_cleaner_labour_multiplier,working_mode,effective_labour_multiplier,started_at,completed_at,actual_duration_minutes,actual_labour_minutes,requires_review,booking_change_requires_review,booking_change_reason,properties(name),assigned_cleaner:profiles!cleaning_jobs_assigned_cleaner_id_fkey(full_name,cleaner_type),smoobu_bookings(check_out_time,guest_name)"
     )
     .eq("id", jobId)
     .maybeSingle();
@@ -120,7 +115,7 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
 
   const [
     { data: bedroomData },
-    { data: cleaningResourceData },
+    { data: cleanerData },
     { data: commentData },
     { data: auditData },
     { data: nextBookingData }
@@ -131,10 +126,11 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
       .eq("cleaning_job_id", job.id)
       .order("bedroom_name"),
     supabase
-      .from("cleaning_resources")
-      .select("id,name,resource_type,labour_multiplier,primary_user_id,primary_user:profiles!cleaning_resources_primary_user_id_fkey(full_name,email)")
+      .from("profiles")
+      .select("id,full_name,email,cleaner_type")
+      .eq("role", "cleaner")
       .eq("is_active", true)
-      .order("name"),
+      .order("full_name"),
     supabase
       .from("cleaning_job_comments")
       .select("id,body,created_at,author:profiles!cleaning_job_comments_author_id_fkey(full_name)")
@@ -149,7 +145,7 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
     nextBookingQuery
   ]);
   const bedrooms = (bedroomData ?? []) as JobBedroomRow[];
-  const cleaningResources = (cleaningResourceData ?? []) as CleaningResourceRow[];
+  const cleaners = (cleanerData ?? []) as CleanerRow[];
   const comments = (commentData ?? []) as CommentRow[];
   const auditEvents = (auditData ?? []) as AuditEventRow[];
   const nextBooking = nextBookingData as NextBookingRow | null;
@@ -160,14 +156,14 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
     requiredConfiguration: bedroom.required_configuration,
     permittedConfigurations: getPermittedConfigurations(bedroom)
   }));
-  const reviewCleaningResources: CleaningJobReviewResource[] = cleaningResources.map((resource) => ({
-    id: resource.id,
-    name: resource.name,
-    resourceType: resource.resource_type,
-    labourMultiplier: resource.labour_multiplier,
-    primaryUserName: resource.primary_user?.full_name ?? null,
-    primaryUserEmail: resource.primary_user?.email ?? null
-  }));
+  const reviewCleaners: CleaningJobReviewCleaner[] = cleaners
+    .filter((cleaner) => cleaner.cleaner_type)
+    .map((cleaner) => ({
+      id: cleaner.id,
+      fullName: cleaner.full_name,
+      email: cleaner.email,
+      cleanerType: cleaner.cleaner_type ?? "individual"
+    }));
   const reviewComments: CleaningJobReviewComment[] = comments.map((comment) => ({
     id: comment.id,
     body: comment.body,
@@ -195,11 +191,10 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
         status: job.status,
         instructions: job.instructions,
         notes: job.notes,
-        assignedCleaningResourceId: job.assigned_cleaning_resource_id,
-        assignedCleaningResourceName: job.assigned_cleaning_resource_name,
-        assignedCleaningResourceType: job.assigned_cleaning_resource_type,
-        assignedCleaningResourceLabourMultiplier: job.assigned_cleaning_resource_labour_multiplier,
         assignedCleanerId: job.assigned_cleaner_id,
+        assignedCleanerName: job.assigned_cleaner_name ?? job.assigned_cleaner?.full_name ?? null,
+        assignedCleanerType: job.assigned_cleaner_type ?? job.assigned_cleaner?.cleaner_type ?? null,
+        assignedCleanerLabourMultiplier: job.assigned_cleaner_labour_multiplier,
         workingMode: job.working_mode,
         effectiveLabourMultiplier: job.effective_labour_multiplier,
         startedAt: job.started_at,
@@ -214,7 +209,7 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
         nextArrivalGuestName: nextBooking?.guest_name ?? null
       }}
       bedrooms={reviewBedrooms}
-      cleaningResources={reviewCleaningResources}
+      cleaners={reviewCleaners}
       comments={reviewComments}
       auditEvents={reviewAuditEvents}
       currentRole={profile.role}

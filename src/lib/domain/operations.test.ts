@@ -10,7 +10,7 @@ import {
   canManageOperations,
   canManageSettings,
   canTransitionCleaningJobStatus,
-  cleaningResourceTypes,
+  cleanerTypes,
   cleaningTypes,
   defaultGuestCheckInTime,
   formatBedConfiguration,
@@ -24,6 +24,7 @@ import {
   getDefaultGuestArrivalDeadlineIso,
   getDefaultLabourMultiplier,
   getEffectiveLabourMultiplier,
+  getCleanerTypeLabel,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
@@ -48,7 +49,7 @@ describe("operations domain rules", () => {
     expect(canManageSettings("cleaner")).toBe(false);
   });
 
-  it("limits cleaner job access to their own assigned jobs or assigned resource login", () => {
+  it("limits cleaner job access to their own assigned jobs", () => {
     expect(
       canCleanerAccessJob({
         role: "cleaner",
@@ -65,14 +66,6 @@ describe("operations domain rules", () => {
       })
     ).toBe(false);
 
-    expect(
-      canCleanerAccessJob({
-        role: "cleaner",
-        userId: "user-1",
-        assignedCleanerId: null,
-        assignedResourcePrimaryUserId: "user-1"
-      })
-    ).toBe(true);
   });
 
   it("maps roles to their dashboard routes", () => {
@@ -153,10 +146,12 @@ describe("operations domain rules", () => {
     expect(cleaningTypes).toEqual(["standard_changeover", "mid_stay_clean", "deep_or_remedial_clean", "other"]);
   });
 
-  it("models individual and pair cleaning resources as one assignable option", () => {
-    expect(cleaningResourceTypes).toEqual(["individual", "pair"]);
+  it("models individual and pair cleaner users as one assignable option", () => {
+    expect(cleanerTypes).toEqual(["individual", "pair"]);
     expect(getDefaultLabourMultiplier("individual")).toBe(1);
     expect(getDefaultLabourMultiplier("pair")).toBe(2);
+    expect(getCleanerTypeLabel("individual")).toBe("Individual");
+    expect(getCleanerTypeLabel("pair")).toBe("Pair");
   });
 
   it("calculates expected working time from expected labour and assigned resource", () => {
@@ -173,7 +168,7 @@ describe("operations domain rules", () => {
 
   it("allows a pair to work solo without doubling actual labour", () => {
     const effectiveMultiplier = getEffectiveLabourMultiplier({
-      resourceType: "pair",
+      cleanerType: "pair",
       assignedLabourMultiplier: 2,
       workingMode: "solo"
     });

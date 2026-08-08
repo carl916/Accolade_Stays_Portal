@@ -4,30 +4,22 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
-import { appRoleSchema, cleaningResourceTypeSchema, getDefaultLabourMultiplier } from "@/lib/domain/operations";
+import { appRoleSchema, cleanerTypeSchema } from "@/lib/domain/operations";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/types";
 
 const inviteUserSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the user's name."),
   email: z.string().trim().email("Enter a valid email address.").toLowerCase(),
-  role: appRoleSchema
+  role: appRoleSchema,
+  cleanerType: cleanerTypeSchema.optional()
 });
 const updateUserSchema = z.object({
   profileId: z.string().uuid("Choose a user."),
   fullName: z.string().trim().min(2, "Enter the user's name."),
   role: appRoleSchema,
-  isActive: z.enum(["active", "inactive"])
-});
-const cleaningResourceFormSchema = z.object({
-  name: z.string().trim().min(2, "Enter the cleaner or team name."),
-  resourceType: cleaningResourceTypeSchema,
-  primaryUserId: z.string().uuid("Choose a valid primary login.").optional(),
-  isActive: z.enum(["active", "inactive"]).default("active")
-});
-const updateCleaningResourceFormSchema = cleaningResourceFormSchema.extend({
-  resourceId: z.string().uuid("Choose a cleaning resource.")
+  isActive: z.enum(["active", "inactive"]),
+  cleanerType: cleanerTypeSchema.optional()
 });
 
 function getFormString(formData: FormData, key: string) {
@@ -56,22 +48,8 @@ function isInviteEmailSendError(error: { message?: string } | null) {
   return Boolean(error?.message?.toLowerCase().includes("sending invite email"));
 }
 
-async function validatePrimaryCleanerLogin(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string | undefined) {
-  if (!userId) {
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", userId)
-    .eq("role", "cleaner")
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (error || !data) {
-    redirectWithError(error?.message ?? "Choose an active cleaner as the primary login.");
-  }
+function getProfileCleanerType(role: z.infer<typeof appRoleSchema>, cleanerType: z.infer<typeof cleanerTypeSchema> | undefined) {
+  return role === "cleaner" ? cleanerType ?? "individual" : null;
 }
 
 export async function inviteUser(formData: FormData) {
@@ -79,7 +57,8 @@ export async function inviteUser(formData: FormData) {
   const parsed = inviteUserSchema.safeParse({
     fullName: getFormString(formData, "fullName"),
     email: getFormString(formData, "email"),
-    role: getFormString(formData, "role")
+    role: getFormString(formData, "role"),
+    cleanerType: getFormString(formData, "cleanerType") || undefined
   });
 
   if (!parsed.success) {
@@ -89,7 +68,8 @@ export async function inviteUser(formData: FormData) {
   const supabase = createSupabaseServiceRoleClient();
   const inviteMetadata = {
     full_name: parsed.data.fullName,
-    role: parsed.data.role
+    role: parsed.data.role,
+    cleaner_type: getProfileCleanerType(parsed.data.role, parsed.data.cleanerType)
   };
   const inviteOptions = {
     data: {
@@ -129,6 +109,7 @@ export async function inviteUser(formData: FormData) {
       email: parsed.data.email,
       full_name: parsed.data.fullName,
       role: parsed.data.role,
+      cleaner_type: getProfileCleanerType(parsed.data.role, parsed.data.cleanerType),
       is_active: true
     },
     { onConflict: "id" }
@@ -136,23 +117,6 @@ export async function inviteUser(formData: FormData) {
 
   if (profileError) {
     redirectWithError(profileError.message);
-  }
-
-  if (parsed.data.role === "cleaner") {
-    const { error: resourceError } = await supabase.from("cleaning_resources").upsert(
-      {
-        name: parsed.data.fullName,
-        resource_type: "individual",
-        labour_multiplier: 1,
-        primary_user_id: invitedUser.id,
-        is_active: true
-      } satisfies Database["public"]["Tables"]["cleaning_resources"]["Insert"],
-      { onConflict: "name" }
-    );
-
-    if (resourceError) {
-      redirectWithError(resourceError.message);
-    }
   }
 
   revalidatePath("/admin/users");
@@ -169,7 +133,8 @@ export async function updateUserProfile(formData: FormData) {
     profileId: getFormString(formData, "profileId"),
     fullName: getFormString(formData, "fullName"),
     role: getFormString(formData, "role"),
-    isActive: getFormString(formData, "isActive")
+    isActive: getFormString(formData, "isActive"),
+    cleanerType: getFormString(formData, "cleanerType") || undefined
   });
 
   if (!parsed.success) {
@@ -181,11 +146,48 @@ export async function updateUserProfile(formData: FormData) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const { data: existingProfileData, error: existingProfileError } = await supabase
+    .from("profiles")
+    .select("id,role,is_active")
+    .eq("id", parsed.data.profileId)
+    .maybeSingle();
+  const existingProfile = existingProfileData as Pick<
+    Awaited<ReturnType<typeof requireRole>>,
+    "id" | "role" | "is_active"
+  > | null;
+
+  if (existingProfileError || !existingProfile) {
+    redirectWithError(existingProfileError?.message ?? "User not found.");
+  }
+
+  if (
+    existingProfile.role === "cleaner" &&
+    (parsed.data.role !== "cleaner" || parsed.data.isActive === "inactive")
+  ) {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: futureJobData, error: futureJobError } = await supabase
+      .from("cleaning_jobs")
+      .select("id")
+      .eq("assigned_cleaner_id", parsed.data.profileId)
+      .gte("scheduled_date", today)
+      .not("status", "in", "(completed,cancelled)")
+      .limit(1);
+
+    if (futureJobError) {
+      redirectWithError(futureJobError.message);
+    }
+
+    if ((futureJobData ?? []).length > 0) {
+      redirectWithError("Reassign this cleaner's future jobs before changing their role or deactivating them.");
+    }
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: parsed.data.fullName,
       role: parsed.data.role,
+      cleaner_type: getProfileCleanerType(parsed.data.role, parsed.data.cleanerType),
       is_active: parsed.data.isActive === "active"
     } as never)
     .eq("id", parsed.data.profileId);
@@ -197,76 +199,4 @@ export async function updateUserProfile(formData: FormData) {
   revalidatePath("/admin/users");
   revalidatePath("/", "layout");
   redirectWithSuccess("User updated.");
-}
-
-export async function createCleaningResource(formData: FormData) {
-  await requireRole(["administrator"]);
-  const parsed = cleaningResourceFormSchema.safeParse({
-    name: getFormString(formData, "name"),
-    resourceType: getFormString(formData, "resourceType"),
-    primaryUserId: getFormString(formData, "primaryUserId") || undefined,
-    isActive: "active"
-  });
-
-  if (!parsed.success) {
-    redirectWithError(parsed.error.issues[0]?.message ?? "Check the cleaner or team details.");
-  }
-
-  const supabase = await createSupabaseServerClient();
-  await validatePrimaryCleanerLogin(supabase, parsed.data.primaryUserId);
-
-  const resourceInsert = {
-    name: parsed.data.name,
-    resource_type: parsed.data.resourceType,
-    labour_multiplier: getDefaultLabourMultiplier(parsed.data.resourceType),
-    primary_user_id: parsed.data.primaryUserId ?? null,
-    is_active: true
-  } satisfies Database["public"]["Tables"]["cleaning_resources"]["Insert"];
-  const { error } = await supabase.from("cleaning_resources").insert(resourceInsert as never);
-
-  if (error) {
-    redirectWithError(error.message);
-  }
-
-  revalidatePath("/admin/users");
-  redirectWithSuccess("Cleaning resource created.");
-}
-
-export async function updateCleaningResource(formData: FormData) {
-  await requireRole(["administrator"]);
-  const parsed = updateCleaningResourceFormSchema.safeParse({
-    resourceId: getFormString(formData, "resourceId"),
-    name: getFormString(formData, "name"),
-    resourceType: getFormString(formData, "resourceType"),
-    primaryUserId: getFormString(formData, "primaryUserId") || undefined,
-    isActive: getFormString(formData, "isActive")
-  });
-
-  if (!parsed.success) {
-    redirectWithError(parsed.error.issues[0]?.message ?? "Check the cleaner or team details.");
-  }
-
-  const supabase = await createSupabaseServerClient();
-  await validatePrimaryCleanerLogin(supabase, parsed.data.primaryUserId);
-
-  const resourceUpdate = {
-    name: parsed.data.name,
-    resource_type: parsed.data.resourceType,
-    labour_multiplier: getDefaultLabourMultiplier(parsed.data.resourceType),
-    primary_user_id: parsed.data.primaryUserId ?? null,
-    is_active: parsed.data.isActive === "active"
-  } satisfies Database["public"]["Tables"]["cleaning_resources"]["Update"];
-  const { error } = await supabase
-    .from("cleaning_resources")
-    .update(resourceUpdate as never)
-    .eq("id", parsed.data.resourceId);
-
-  if (error) {
-    redirectWithError(error.message);
-  }
-
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/jobs");
-  revalidatePath("/manager");
-  redirectWithSuccess("Cleaning resource updated.");
 }

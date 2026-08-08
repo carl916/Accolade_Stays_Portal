@@ -14,8 +14,8 @@ export const cleaningJobStatuses = [
 
 export const cleaningTypes = ["standard_changeover", "mid_stay_clean", "deep_or_remedial_clean", "other"] as const;
 
-export const cleaningResourceTypes = ["individual", "pair"] as const;
-export const cleaningResourceWorkingModes = ["as_assigned", "solo"] as const;
+export const cleanerTypes = ["individual", "pair"] as const;
+export const cleanerWorkingModes = ["as_pair", "solo"] as const;
 
 export const physicalBedTypes = ["zip_and_link", "fixed_double", "fixed_single", "other"] as const;
 
@@ -54,8 +54,8 @@ export const defaultGuestCheckInTime = "16:00";
 export type AppRole = (typeof appRoles)[number];
 export type CleaningJobStatus = (typeof cleaningJobStatuses)[number];
 export type CleaningType = (typeof cleaningTypes)[number];
-export type CleaningResourceType = (typeof cleaningResourceTypes)[number];
-export type CleaningResourceWorkingMode = (typeof cleaningResourceWorkingModes)[number];
+export type CleanerType = (typeof cleanerTypes)[number];
+export type CleanerWorkingMode = (typeof cleanerWorkingModes)[number];
 export type PhysicalBedType = (typeof physicalBedTypes)[number];
 export type BedroomSetupPhysicalBedType = (typeof bedroomSetupPhysicalBedTypes)[number];
 export type BedConfiguration = (typeof bedConfigurations)[number];
@@ -66,8 +66,8 @@ export type SupportedCleaningDuration = (typeof supportedCleaningDurations)[numb
 export const appRoleSchema = z.enum(appRoles);
 export const cleaningJobStatusSchema = z.enum(cleaningJobStatuses);
 export const cleaningTypeSchema = z.enum(cleaningTypes);
-export const cleaningResourceTypeSchema = z.enum(cleaningResourceTypes);
-export const cleaningResourceWorkingModeSchema = z.enum(cleaningResourceWorkingModes);
+export const cleanerTypeSchema = z.enum(cleanerTypes);
+export const cleanerWorkingModeSchema = z.enum(cleanerWorkingModes);
 export const physicalBedTypeSchema = z.enum(physicalBedTypes);
 export const bedroomSetupPhysicalBedTypeSchema = z.enum(bedroomSetupPhysicalBedTypes);
 export const bedConfigurationSchema = z.enum(bedConfigurations);
@@ -125,13 +125,8 @@ export function canCleanerAccessJob(args: {
   role: AppRole | null | undefined;
   userId: string | null | undefined;
   assignedCleanerId: string | null | undefined;
-  assignedResourcePrimaryUserId?: string | null | undefined;
 }) {
-  return (
-    args.role === "cleaner" &&
-    Boolean(args.userId) &&
-    (args.userId === args.assignedCleanerId || args.userId === args.assignedResourcePrimaryUserId)
-  );
+  return args.role === "cleaner" && Boolean(args.userId) && args.userId === args.assignedCleanerId;
 }
 
 export function getRoleHomePath(role: AppRole) {
@@ -153,22 +148,19 @@ export function canTransitionCleaningJobStatus(from: CleaningJobStatus, to: Clea
 export function getCleaningJobStatusLabel(args: {
   status: CleaningJobStatus;
   assignedCleanerName?: string | null;
-  assignedResourceName?: string | null;
   requiresReview?: boolean;
   bookingChangeRequiresReview?: boolean;
 }) {
-  const assignedName = args.assignedResourceName ?? args.assignedCleanerName;
-
   if (args.status === "awaiting_approval") {
     return "Needs review";
   }
 
   if (args.status === "awaiting_cleaner_response") {
-    return assignedName ? `Assigned - ${assignedName}` : "Confirmed - Unassigned";
+    return args.assignedCleanerName ? `Assigned - ${args.assignedCleanerName}` : "Confirmed - Unassigned";
   }
 
   if (args.status === "accepted") {
-    return assignedName ? `Accepted - ${assignedName}` : "Accepted";
+    return args.assignedCleanerName ? `Accepted - ${args.assignedCleanerName}` : "Accepted";
   }
 
   if (args.status === "requires_review" || args.requiresReview || args.bookingChangeRequiresReview) {
@@ -292,15 +284,15 @@ export function requiresReviewForFinalBedConfiguration(args: {
   return Boolean(args.finalConfiguration) && args.finalConfiguration !== args.requiredConfiguration;
 }
 
-export function getDefaultLabourMultiplier(resourceType: CleaningResourceType) {
-  return resourceType === "pair" ? 2 : 1;
+export function getDefaultLabourMultiplier(cleanerType: CleanerType) {
+  return cleanerType === "pair" ? 2 : 1;
 }
 
-export function getCleaningResourceTypeLabel(resourceType: CleaningResourceType) {
-  return resourceType === "pair" ? "Pair" : "Individual";
+export function getCleanerTypeLabel(cleanerType: CleanerType) {
+  return cleanerType === "pair" ? "Pair" : "Individual";
 }
 
-export function getWorkingModeLabel(workingMode: CleaningResourceWorkingMode | null | undefined) {
+export function getWorkingModeLabel(workingMode: CleanerWorkingMode | null | undefined) {
   if (workingMode === "solo") {
     return "Solo";
   }
@@ -309,11 +301,11 @@ export function getWorkingModeLabel(workingMode: CleaningResourceWorkingMode | n
 }
 
 export function getEffectiveLabourMultiplier(args: {
-  resourceType: CleaningResourceType;
+  cleanerType: CleanerType;
   assignedLabourMultiplier: number;
-  workingMode?: CleaningResourceWorkingMode | null;
+  workingMode?: CleanerWorkingMode | null;
 }) {
-  if (args.resourceType === "pair" && args.workingMode === "solo") {
+  if (args.cleanerType === "pair" && args.workingMode === "solo") {
     return 1;
   }
 
