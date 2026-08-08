@@ -31,6 +31,7 @@ type AdminUsersPageProps = {
   searchParams?: Promise<{
     error?: string;
     success?: string;
+    inviteLink?: string;
   }>;
 };
 
@@ -77,6 +78,16 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
           {params.success}
         </p>
+      ) : null}
+      {params?.inviteLink ? (
+        <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-3">
+          <p className="text-sm font-semibold text-amber-900">Copy this one-time invite link and send it to the user.</p>
+          <input
+            readOnly
+            value={params.inviteLink}
+            className="min-h-11 rounded-md border border-amber-300 bg-white px-3 text-sm text-brand-ink outline-none focus:ring-2 focus:ring-brand-focus/30"
+          />
+        </div>
       ) : null}
       {error ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">

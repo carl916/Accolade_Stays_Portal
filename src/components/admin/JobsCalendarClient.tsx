@@ -716,7 +716,7 @@ export function JobsCalendarClient({
           openAddCleanForDate(args.dateValue);
         }}
         aria-label={label}
-        className={`absolute bottom-1.5 left-1.5 right-1.5 z-20 flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-slate bg-white/90 px-2 text-xs font-semibold text-brand-primary shadow-sm transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${visibilityClass}`}
+        className={`absolute bottom-1.5 left-1.5 right-1.5 z-20 flex min-h-14 items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-slate bg-white/90 px-2 text-xs font-semibold text-brand-primary shadow-sm transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${visibilityClass}`}
       >
         <Plus className="h-3.5 w-3.5" aria-hidden="true" />
         Add clean
@@ -729,7 +729,7 @@ export function JobsCalendarClient({
       <Link
         key={job.id}
         href={`${jobDetailBasePath}/${job.id}`}
-        className={`grid min-w-0 gap-0.5 rounded-md border px-2 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+        className={`grid min-h-14 min-w-0 self-start gap-0.5 rounded-md border px-2 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
           size === "regular" ? "py-2" : "py-1.5"
         } ${getCleaningChipClasses(job)}`}
       >
@@ -1116,7 +1116,7 @@ export function JobsCalendarClient({
                                     }
                                   }
                                 }}
-                                className={`group relative grid min-h-12 gap-1 p-1.5 focus:outline-none ${
+                                className={`group relative grid min-h-16 auto-rows-min content-start gap-1 p-1.5 focus:outline-none ${
                                   canCreateManualClean ? "cursor-pointer focus:ring-2 focus:ring-brand-focus focus:ring-inset" : ""
                                 }`}
                                 style={{ gridColumn: `${index * 2 + 2} / span 2` }}
@@ -1232,7 +1232,7 @@ export function JobsCalendarClient({
                               }
                             }
                           }}
-                          className={`group relative mt-3 grid min-h-12 gap-2 rounded-md border border-transparent focus:outline-none ${
+                          className={`group relative mt-3 grid min-h-16 auto-rows-min content-start gap-2 rounded-md border border-transparent focus:outline-none ${
                             canCreateManualClean ? "cursor-pointer focus:ring-2 focus:ring-brand-focus focus:ring-inset" : ""
                           }`}
                         >

@@ -7,6 +7,7 @@ describe("getCleanAddAffordanceVariant", () => {
   });
 
   it("uses the full ghost panel when the date has spare row capacity", () => {
+    expect(getCleanAddAffordanceVariant({ dayCleanCount: 1, weekMaxCleanCount: 2 })).toBe("full");
     expect(getCleanAddAffordanceVariant({ dayCleanCount: 1, weekMaxCleanCount: 3 })).toBe("full");
   });
 

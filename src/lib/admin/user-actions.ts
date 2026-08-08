@@ -43,6 +43,19 @@ function redirectWithSuccess(message: string): never {
   redirect(`/admin/users?success=${encodeURIComponent(message)}`);
 }
 
+function redirectWithInviteLink(message: string, inviteLink: string): never {
+  const params = new URLSearchParams({
+    success: message,
+    inviteLink
+  });
+
+  redirect(`/admin/users?${params.toString()}`);
+}
+
+function isInviteEmailSendError(error: { message?: string } | null) {
+  return Boolean(error?.message?.toLowerCase().includes("sending invite email"));
+}
+
 async function validatePrimaryCleanerLogin(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string | undefined) {
   if (!userId) {
     return;
@@ -74,20 +87,45 @@ export async function inviteUser(formData: FormData) {
   }
 
   const supabase = createSupabaseServiceRoleClient();
-  const { data, error } = await supabase.auth.admin.inviteUserByEmail(parsed.data.email, {
+  const inviteMetadata = {
+    full_name: parsed.data.fullName,
+    role: parsed.data.role
+  };
+  const inviteOptions = {
     data: {
-      full_name: parsed.data.fullName,
-      role: parsed.data.role
+      ...inviteMetadata
     }
-  });
+  };
+  const { data, error } = await supabase.auth.admin.inviteUserByEmail(parsed.data.email, inviteOptions);
+  let invitedUser = data.user;
+  let manualInviteLink: string | null = null;
 
   if (error || !data.user) {
-    redirectWithError(error?.message ?? "Supabase did not return the invited user.");
+    if (!isInviteEmailSendError(error)) {
+      redirectWithError(error?.message ?? "Supabase did not return the invited user.");
+    }
+
+    const generatedLink = await supabase.auth.admin.generateLink({
+      type: "invite",
+      email: parsed.data.email,
+      options: inviteOptions
+    });
+
+    if (generatedLink.error || !generatedLink.data.user) {
+      redirectWithError(generatedLink.error?.message ?? error?.message ?? "Supabase could not create an invite link.");
+    }
+
+    invitedUser = generatedLink.data.user;
+    manualInviteLink = generatedLink.data.properties.action_link;
+  }
+
+  if (!invitedUser) {
+    redirectWithError("Supabase did not return the invited user.");
   }
 
   const { error: profileError } = await supabase.from("profiles").upsert(
     {
-      id: data.user.id,
+      id: invitedUser.id,
       email: parsed.data.email,
       full_name: parsed.data.fullName,
       role: parsed.data.role,
@@ -106,7 +144,7 @@ export async function inviteUser(formData: FormData) {
         name: parsed.data.fullName,
         resource_type: "individual",
         labour_multiplier: 1,
-        primary_user_id: data.user.id,
+        primary_user_id: invitedUser.id,
         is_active: true
       } satisfies Database["public"]["Tables"]["cleaning_resources"]["Insert"],
       { onConflict: "name" }
@@ -118,6 +156,10 @@ export async function inviteUser(formData: FormData) {
   }
 
   revalidatePath("/admin/users");
+  if (manualInviteLink) {
+    redirectWithInviteLink("Supabase could not send the email, so an invite link was generated.", manualInviteLink);
+  }
+
   redirectWithSuccess("Invite sent.");
 }
 
