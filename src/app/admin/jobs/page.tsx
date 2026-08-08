@@ -12,13 +12,18 @@ type CleaningJobRow = Pick<
   | "id"
   | "property_id"
   | "scheduled_date"
+  | "expected_start_time"
   | "status"
   | "cleaning_type"
+  | "assigned_cleaner_id"
+  | "completed_at"
+  | "requires_review"
   | "smoobu_booking_id"
   | "booking_change_requires_review"
   | "booking_change_reason"
 > & {
   properties: Pick<Database["public"]["Tables"]["properties"]["Row"], "name"> | null;
+  assigned_cleaner: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name"> | null;
 };
 
 type PropertyRow = Pick<
@@ -128,7 +133,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
   ] = await Promise.all([
     supabase
       .from("cleaning_jobs")
-      .select("id,property_id,scheduled_date,status,cleaning_type,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name)")
+      .select(
+        "id,property_id,scheduled_date,expected_start_time,status,cleaning_type,assigned_cleaner_id,completed_at,requires_review,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name),assigned_cleaner:profiles!cleaning_jobs_assigned_cleaner_id_fkey(full_name)"
+      )
       .order("scheduled_date", { ascending: true }),
     supabase
       .from("properties")
@@ -221,9 +228,9 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
                     minute: "2-digit"
                   }).format(new Date(latestSyncRun.last_successful_sync_at))}`
                 : "No successful sync yet"}
-              {" · "}
+              {" - "}
               {mappings.filter((mapping) => mapping.is_active).length} properties mapped
-              {unmappedApartmentCount > 0 ? ` · ${unmappedApartmentCount} unmapped apartments` : ""}
+              {unmappedApartmentCount > 0 ? ` - ${unmappedApartmentCount} unmapped apartments` : ""}
             </p>
             {latestSyncRun?.error_message || integrationWarning ? (
               <p className="mt-1 text-sm font-medium text-amber-700">
@@ -278,8 +285,12 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
           propertyId: job.property_id,
           propertyName: job.properties?.name ?? "Unknown property",
           scheduledDate: job.scheduled_date,
+          expectedStartTime: job.expected_start_time,
           cleaningType: job.cleaning_type,
           status: job.status,
+          assignedCleanerName: job.assigned_cleaner?.full_name ?? null,
+          completedAt: job.completed_at,
+          requiresReview: job.requires_review,
           bookingId: job.smoobu_booking_id,
           bookingChangeRequiresReview: job.booking_change_requires_review,
           bookingChangeReason: job.booking_change_reason

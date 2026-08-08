@@ -7,14 +7,34 @@ import {
   endOfWeek,
   format,
   isSameMonth,
-  parseISO,
   startOfMonth,
   startOfWeek
 } from "date-fns";
-import { BedDouble, CalendarPlus, ChevronLeft, ChevronRight, Clock, Link2, Mail, Plus, Settings2 } from "lucide-react";
+import {
+  AlertTriangle,
+  BedDouble,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ListChecks,
+  LogIn,
+  LogOut,
+  Mail,
+  Plus,
+  Settings2
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createCleaningJob } from "@/lib/admin/job-actions";
+import {
+  addCalendarDays,
+  buildStayCalendarWeeks,
+  parseCalendarDate,
+  toCalendarDateValue
+} from "@/lib/calendar/stay-segments";
 import {
   cleaningTypes,
   defaultGuestCheckInTime,
@@ -48,8 +68,12 @@ type CleaningJobCalendarItem = {
   propertyId: string;
   propertyName: string;
   scheduledDate: string;
+  expectedStartTime: string | null;
   cleaningType: CleaningType;
   status: CleaningJobStatus;
+  assignedCleanerName: string | null;
+  completedAt: string | null;
+  requiresReview: boolean;
   bookingId: string | null;
   bookingChangeRequiresReview: boolean;
   bookingChangeReason: string | null;
@@ -129,6 +153,8 @@ type AddCleanDraft = {
   nextCheckIn?: string | null;
 };
 
+type CalendarView = "month" | "agenda";
+
 const allPropertiesValue = "all";
 
 const cleaningTypeLabels = {
@@ -150,8 +176,16 @@ const statusLabels = {
 
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+const propertyTonePalette = [
+  { accent: "#3f516d", background: "#eef2f7", text: "#1f2937" },
+  { accent: "#4f6f52", background: "#edf5ee", text: "#1f3324" },
+  { accent: "#8a5a44", background: "#f6eee9", text: "#3b261e" },
+  { accent: "#6a5f8f", background: "#f1eff7", text: "#2f2940" },
+  { accent: "#2f6f73", background: "#eaf5f5", text: "#1d3638" }
+];
+
 function toDateInputValue(date: Date) {
-  return format(date, "yyyy-MM-dd");
+  return toCalendarDateValue(date);
 }
 
 function formatDurationCompact(minutes: number) {
@@ -214,6 +248,10 @@ function getGuestShortName(name: string) {
   return parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? "Guest";
 }
 
+function getFirstName(name: string) {
+  return name.trim().split(/\s+/).filter(Boolean)[0] ?? name;
+}
+
 function formatTime(time: string | null | undefined, fallback = "Not set") {
   return time ? time.slice(0, 5) : fallback;
 }
@@ -223,7 +261,26 @@ function formatDate(value: string) {
     day: "2-digit",
     month: "short",
     year: "numeric"
-  }).format(parseISO(value));
+  }).format(parseCalendarDate(value));
+}
+
+function formatDateHeading(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(parseCalendarDate(value));
+}
+
+function formatDateTimeClock(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
 
 function formatDateTime(value: string | null) {
@@ -244,8 +301,81 @@ function toDateTimeLocal(date: string, time: string | null | undefined) {
   return time ? `${date}T${time.slice(0, 5)}` : "";
 }
 
+function groupByDate<T>(items: T[], getDate: (item: T) => string) {
+  const grouped = new Map<string, T[]>();
+
+  for (const item of items) {
+    const date = getDate(item);
+    grouped.set(date, [...(grouped.get(date) ?? []), item]);
+  }
+
+  return grouped;
+}
+
+function getCleaningChipText(job: CleaningJobCalendarItem) {
+  if (job.status === "requires_review" || job.requiresReview || job.bookingChangeRequiresReview) {
+    return "Clean - Issue reported";
+  }
+
+  if (job.status === "in_progress") {
+    return "Clean - In progress";
+  }
+
+  if (job.status === "completed") {
+    const completedAt = formatDateTimeClock(job.completedAt);
+    return completedAt ? `Clean - Completed ${completedAt}` : "Clean - Completed";
+  }
+
+  if (job.assignedCleanerName) {
+    return `Clean - ${getFirstName(job.assignedCleanerName)}`;
+  }
+
+  return "Clean - Unassigned";
+}
+
+function getCleaningChipClasses(job: CleaningJobCalendarItem) {
+  if (job.status === "cancelled") {
+    return "border-stone-200 bg-stone-50 text-stone-500";
+  }
+
+  if (job.status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+
+  if (job.status === "requires_review" || job.requiresReview || job.bookingChangeRequiresReview) {
+    return "border-amber-300 bg-amber-50 text-amber-900";
+  }
+
+  if (job.status === "in_progress") {
+    return "border-brand-slate bg-brand-light text-brand-ink";
+  }
+
+  if (!job.assignedCleanerName) {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
+
+  return "border-brand-border bg-brand-muted text-brand-ink";
+}
+
+function getCleaningChipIcon(job: CleaningJobCalendarItem) {
+  if (job.status === "completed") {
+    return <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
+  }
+
+  if (job.status === "requires_review" || job.requiresReview || job.bookingChangeRequiresReview || !job.assignedCleanerName) {
+    return <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
+  }
+
+  return <ListChecks className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
+}
+
+function sortBookingsByPropertyAndGuest(left: BookingCalendarItem, right: BookingCalendarItem) {
+  return `${left.propertyName} ${left.guestName}`.localeCompare(`${right.propertyName} ${right.guestName}`);
+}
+
 export function JobsCalendarClient({ properties, jobs, bookings, initialError, initialModal }: JobsCalendarClientProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
+  const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [propertyFilter, setPropertyFilter] = useState(allPropertiesValue);
   const [addCleanDraft, setAddCleanDraft] = useState<AddCleanDraft | null>(() => {
     if (!initialModal?.isOpen) {
@@ -293,6 +423,16 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     return eachDayOfInterval({ start, end });
   }, [calendarMonth]);
 
+  const calendarWeeks = useMemo(() => {
+    const weeks: Date[][] = [];
+
+    for (let index = 0; index < calendarDays.length; index += 7) {
+      weeks.push(calendarDays.slice(index, index + 7));
+    }
+
+    return weeks;
+  }, [calendarDays]);
+
   const filteredJobs = useMemo(() => {
     if (propertyFilter === allPropertiesValue) {
       return jobs;
@@ -309,35 +449,94 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     return bookings.filter((booking) => booking.propertyId === propertyFilter);
   }, [bookings, propertyFilter]);
 
-  const jobsByDate = useMemo(() => {
-    const grouped = new Map<string, CleaningJobCalendarItem[]>();
+  const bookingsById = useMemo(() => new Map(bookings.map((booking) => [booking.id, booking])), [bookings]);
 
-    for (const job of filteredJobs) {
-      const existingJobs = grouped.get(job.scheduledDate) ?? [];
-      grouped.set(job.scheduledDate, [...existingJobs, job]);
+  const propertyTonesById = useMemo(
+    () =>
+      new Map(
+        properties.map((property, index) => [
+          property.id,
+          propertyTonePalette[index % propertyTonePalette.length]
+        ])
+      ),
+    [properties]
+  );
+
+  const jobsByDate = useMemo(
+    () =>
+      groupByDate(
+        [...filteredJobs].sort((left, right) =>
+          `${left.scheduledDate} ${formatTime(left.expectedStartTime, "99:99")} ${left.propertyName}`.localeCompare(
+            `${right.scheduledDate} ${formatTime(right.expectedStartTime, "99:99")} ${right.propertyName}`
+          )
+        ),
+        (job) => job.scheduledDate
+      ),
+    [filteredJobs]
+  );
+
+  const arrivalsByDate = useMemo(
+    () =>
+      groupByDate([...filteredBookings].sort(sortBookingsByPropertyAndGuest), (booking) => booking.arrivalDate),
+    [filteredBookings]
+  );
+
+  const departuresByDate = useMemo(
+    () =>
+      groupByDate([...filteredBookings].sort(sortBookingsByPropertyAndGuest), (booking) => booking.departureDate),
+    [filteredBookings]
+  );
+
+  const occupancyByDate = useMemo(() => {
+    const grouped = new Map<string, BookingCalendarItem[]>();
+    const visibleStart = calendarDays[0] ? parseCalendarDate(toDateInputValue(calendarDays[0])) : null;
+    const visibleEndExclusive = calendarDays[calendarDays.length - 1]
+      ? addCalendarDays(parseCalendarDate(toDateInputValue(calendarDays[calendarDays.length - 1])), 1)
+      : null;
+
+    if (!visibleStart || !visibleEndExclusive) {
+      return grouped;
     }
 
-    return grouped;
-  }, [filteredJobs]);
-
-  const bookingsByDate = useMemo(() => {
-    const grouped = new Map<string, BookingCalendarItem[]>();
-
     for (const booking of filteredBookings) {
-      const days = eachDayOfInterval({
-        start: parseISO(booking.arrivalDate),
-        end: parseISO(booking.departureDate)
-      });
+      const bookingStart = parseCalendarDate(booking.arrivalDate);
+      const bookingEndExclusive = parseCalendarDate(booking.departureDate);
+      let cursor = bookingStart > visibleStart ? bookingStart : visibleStart;
+      const end = bookingEndExclusive < visibleEndExclusive ? bookingEndExclusive : visibleEndExclusive;
 
-      for (const day of days) {
-        const dateValue = toDateInputValue(day);
-        const existingBookings = grouped.get(dateValue) ?? [];
-        grouped.set(dateValue, [...existingBookings, booking]);
+      while (cursor < end) {
+        const dateValue = toDateInputValue(cursor);
+        grouped.set(dateValue, [...(grouped.get(dateValue) ?? []), booking]);
+        cursor = addCalendarDays(cursor, 1);
       }
     }
 
     return grouped;
-  }, [filteredBookings]);
+  }, [calendarDays, filteredBookings]);
+
+  const stayWeeksByStart = useMemo(() => {
+    const stayWeeks = buildStayCalendarWeeks({
+      bookings: filteredBookings,
+      weekStarts: calendarWeeks.map((week) => toDateInputValue(week[0]))
+    });
+
+    return new Map(stayWeeks.map((week) => [week.weekStart, week]));
+  }, [calendarWeeks, filteredBookings]);
+
+  const todayValue = toDateInputValue(new Date());
+
+  const agendaDateGroups = useMemo(() => {
+    const upcomingJobs = filteredJobs
+      .filter((job) => job.status !== "cancelled" && job.scheduledDate >= todayValue)
+      .sort((left, right) =>
+        `${left.scheduledDate} ${formatTime(left.expectedStartTime, "99:99")} ${left.propertyName}`.localeCompare(
+          `${right.scheduledDate} ${formatTime(right.expectedStartTime, "99:99")} ${right.propertyName}`
+        )
+      )
+      .slice(0, 30);
+
+    return [...groupByDate(upcomingJobs, (job) => job.scheduledDate).entries()];
+  }, [filteredJobs, todayValue]);
 
   function getNextArrivalForBooking(booking: BookingCalendarItem) {
     return bookings
@@ -413,11 +612,73 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
 
   const selectedPropertyHasBedrooms = (selectedProperty?.bedrooms.length ?? 0) > 0;
 
+  function renderBookingBoundary(booking: BookingCalendarItem, type: "arrival" | "departure") {
+    const isDeparture = type === "departure";
+    const Icon = isDeparture ? LogOut : LogIn;
+    const label = `${isDeparture ? "Depart" : "Arrive"} ${getGuestShortName(booking.guestName)}`;
+    const time = isDeparture ? booking.checkOutTime : booking.checkInTime;
+
+    return (
+      <button
+        key={`${type}-${booking.id}`}
+        type="button"
+        onClick={() => openBooking(booking)}
+        title={`${label} - ${booking.propertyName}${time ? ` at ${formatTime(time)}` : ""}`}
+        className="flex min-h-7 min-w-0 items-center gap-1 rounded-sm border border-transparent px-1.5 text-left text-xs text-stone-700 transition hover:border-brand-border hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
+      >
+        <Icon className="h-3.5 w-3.5 shrink-0 text-brand-darkSlate" aria-hidden="true" />
+        <span className="truncate">
+          {label} - {booking.propertyName}
+        </span>
+        {isDeparture && booking.linkedJobs.length === 0 ? (
+          <span className="ml-auto shrink-0 rounded-sm bg-amber-50 px-1 text-[0.65rem] font-semibold text-amber-800">
+            No clean
+          </span>
+        ) : null}
+      </button>
+    );
+  }
+
+  function renderCleaningChip(job: CleaningJobCalendarItem, size: "compact" | "regular" = "compact") {
+    return (
+      <Link
+        key={job.id}
+        href={`/admin/jobs/${job.id}`}
+        className={`grid min-w-0 gap-0.5 rounded-md border px-2 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+          size === "regular" ? "py-2" : "py-1.5"
+        } ${getCleaningChipClasses(job)}`}
+      >
+        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold">
+          {getCleaningChipIcon(job)}
+          <span className="truncate">{getCleaningChipText(job)}</span>
+        </span>
+        <span className="truncate text-[0.68rem] font-medium opacity-80">
+          {job.propertyName}
+          {job.expectedStartTime ? ` - ${formatTime(job.expectedStartTime)}` : ` - ${statusLabels[job.status]}`}
+        </span>
+      </Link>
+    );
+  }
+
+  function getOccupiedPropertySummary(bookingsForDate: BookingCalendarItem[]) {
+    const names = [...new Set(bookingsForDate.map((booking) => booking.propertyName))];
+
+    if (names.length === 0) {
+      return "No stays";
+    }
+
+    if (names.length <= 2) {
+      return `Occupied: ${names.join(", ")}`;
+    }
+
+    return `Occupied: ${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  }
+
   return (
     <>
       <div className="grid gap-4 rounded-lg border border-brand-border bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex items-center justify-between gap-2 sm:justify-start">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setCalendarMonth((month) => addMonths(month, -1))}
@@ -437,9 +698,37 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
             >
               <ChevronRight className="h-5 w-5" aria-hidden="true" />
             </button>
+            <button
+              type="button"
+              onClick={() => setCalendarMonth(startOfMonth(new Date()))}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-brand-border px-3 text-sm font-semibold text-brand-ink transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+            >
+              <CalendarDays className="h-4 w-4" aria-hidden="true" />
+              Today
+            </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[minmax(14rem,1fr)_auto] sm:items-end">
+          <div className="grid gap-3 sm:grid-cols-[auto_minmax(14rem,1fr)_auto] sm:items-end">
+            <div className="grid gap-1.5 text-sm font-medium text-brand-ink">
+              View
+              <div className="inline-grid min-h-11 grid-cols-2 overflow-hidden rounded-md border border-brand-border bg-white">
+                {(["month", "agenda"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => setCalendarView(view)}
+                    aria-pressed={calendarView === view}
+                    className={`px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+                      calendarView === view
+                        ? "bg-brand-primary text-brand-primaryForeground"
+                        : "text-stone-700 hover:bg-brand-muted"
+                    }`}
+                  >
+                    {view === "month" ? "Month" : "Agenda"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
               Property
               <select
@@ -472,163 +761,235 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
           </p>
         ) : null}
 
-        <div className="hidden grid-cols-7 gap-px overflow-hidden rounded-lg border border-brand-border bg-brand-border sm:grid">
-          {weekdayLabels.map((weekday) => (
-            <div key={weekday} className="bg-brand-muted px-3 py-2 text-xs font-semibold uppercase text-brand-darkSlate">
-              {weekday}
-            </div>
-          ))}
-          {calendarDays.map((day) => {
-            const dateValue = toDateInputValue(day);
-            const dayJobs = jobsByDate.get(dateValue) ?? [];
-            const dayBookings = bookingsByDate.get(dateValue) ?? [];
-            const isCurrentMonth = isSameMonth(day, calendarMonth);
-
-            return (
-              <div
-                key={dateValue}
-                className={`min-h-36 bg-white p-2 ${isCurrentMonth ? "" : "text-stone-400"}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => openAddClean(dateValue)}
-                    className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-sm font-semibold transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
-                    aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
-                  >
-                    {format(day, "d")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openAddClean(dateValue)}
-                    className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-md text-brand-darkSlate transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
-                    aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="mt-2 grid gap-1.5">
-                  {dayBookings.map((booking) => {
-                    const isArrival = booking.arrivalDate === dateValue;
-                    const isDeparture = booking.departureDate === dateValue;
-
-                    return (
-                      <button
-                        key={`${booking.id}-${dateValue}`}
-                        type="button"
-                        onClick={() => openBooking(booking)}
-                        className="grid gap-0.5 rounded-md border border-brand-slate bg-white px-2 py-1.5 text-left text-brand-ink shadow-sm transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
-                      >
-                        <span className="truncate text-xs font-semibold">
-                          {isArrival ? "Arrive " : isDeparture ? "Depart " : ""}
-                          {getGuestShortName(booking.guestName)}
-                        </span>
-                        <span className="truncate text-xs text-stone-600">
-                          {booking.propertyName}
-                          {booking.channelName ? ` · ${booking.channelName}` : ""}
-                        </span>
-                        {booking.linkedJobs.length > 0 ? (
-                          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-brand-light px-1.5 py-0.5 text-[0.68rem] font-semibold text-brand-primary">
-                            <Link2 className="h-3 w-3" aria-hidden="true" />
-                            Clean linked
-                          </span>
-                        ) : isDeparture ? (
-                          <span className="text-[0.68rem] font-semibold text-amber-700">No clean linked</span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                  {dayJobs.map((job) => (
-                    <Link
-                      key={job.id}
-                      href={`/admin/jobs/${job.id}`}
-                      className="grid gap-0.5 rounded-md border border-brand-border bg-brand-muted px-2 py-1.5 text-left transition hover:border-brand-slate focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
-                    >
-                      <span className="truncate text-xs font-semibold text-brand-ink">{job.propertyName}</span>
-                      <span className="truncate text-xs text-stone-600">{cleaningTypeLabels[job.cleaningType]}</span>
-                      {job.bookingChangeRequiresReview ? (
-                        <span className="text-[0.68rem] font-semibold text-amber-700">Booking changed</span>
-                      ) : null}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="grid gap-2 sm:hidden">
-          {calendarDays
-            .filter((day) => isSameMonth(day, calendarMonth))
-            .map((day) => {
-              const dateValue = toDateInputValue(day);
-              const dayJobs = jobsByDate.get(dateValue) ?? [];
-              const dayBookings = bookingsByDate.get(dateValue) ?? [];
-
-              return (
-                <div key={dateValue} className="rounded-lg border border-brand-border bg-white p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => openAddClean(dateValue)}
-                      className="text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-                    >
-                      <span className="block text-sm font-semibold text-brand-ink">{format(day, "EEE d MMM")}</span>
-                      <span className="block text-xs text-stone-500">
-                        {dayJobs.length === 0 && dayBookings.length === 0
-                          ? "No cleans or stays"
-                          : `${dayBookings.length} stay${dayBookings.length === 1 ? "" : "s"}, ${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}`}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openAddClean(dateValue)}
-                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-brand-border text-brand-darkSlate transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-                      aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
-                    >
-                      <Plus className="h-4 w-4" aria-hidden="true" />
-                    </button>
+        {calendarView === "month" ? (
+          <>
+            <div className="hidden overflow-hidden rounded-lg border border-brand-border bg-white sm:block">
+              <div className="grid grid-cols-7 border-b border-brand-border bg-brand-muted">
+                {weekdayLabels.map((weekday) => (
+                  <div key={weekday} className="px-3 py-2 text-xs font-semibold uppercase text-brand-darkSlate">
+                    {weekday}
                   </div>
-                  {dayBookings.length > 0 || dayJobs.length > 0 ? (
-                    <div className="mt-3 grid gap-2">
-                      {dayBookings.map((booking) => (
-                        <button
-                          key={`${booking.id}-${dateValue}`}
-                          type="button"
-                          onClick={() => openBooking(booking)}
-                          className="grid gap-1 rounded-md border border-brand-slate bg-white px-3 py-2 text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-                        >
-                          <span className="text-sm font-semibold text-brand-ink">
-                            {booking.propertyName} · {getGuestShortName(booking.guestName)}
-                          </span>
-                          <span className="text-sm text-stone-600">
-                            {booking.arrivalDate === dateValue ? "Arrival" : booking.departureDate === dateValue ? "Departure" : "Stay"}
-                            {booking.channelName ? ` · ${booking.channelName}` : ""}
-                          </span>
-                          {booking.linkedJobs.length > 0 ? (
-                            <span className="text-xs font-medium text-brand-darkSlate">Clean linked</span>
-                          ) : booking.departureDate === dateValue ? (
-                            <span className="text-xs font-medium text-amber-700">No clean linked</span>
-                          ) : null}
-                        </button>
-                      ))}
-                      {dayJobs.map((job) => (
-                        <Link
-                          key={job.id}
-                          href={`/admin/jobs/${job.id}`}
-                          className="grid gap-1 rounded-md bg-brand-muted px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-                        >
-                          <span className="text-sm font-semibold text-brand-ink">{job.propertyName}</span>
-                          <span className="text-sm text-stone-600">{cleaningTypeLabels[job.cleaningType]}</span>
-                          <span className="text-xs font-medium text-brand-darkSlate">{statusLabels[job.status]}</span>
-                        </Link>
-                      ))}
+                ))}
+              </div>
+              <div className="divide-y divide-brand-border">
+                {calendarWeeks.map((week) => {
+                  const weekStartValue = toDateInputValue(week[0]);
+                  const stayWeek = stayWeeksByStart.get(weekStartValue);
+                  const laneCount = stayWeek?.laneCount ?? 0;
+
+                  return (
+                    <div key={weekStartValue} className="bg-white">
+                      <div className="grid grid-cols-7 divide-x divide-brand-border">
+                        {week.map((day) => {
+                          const dateValue = toDateInputValue(day);
+                          const dayJobs = jobsByDate.get(dateValue) ?? [];
+                          const arrivals = arrivalsByDate.get(dateValue) ?? [];
+                          const departures = departuresByDate.get(dateValue) ?? [];
+                          const occupied = occupancyByDate.get(dateValue) ?? [];
+                          const isCurrentMonth = isSameMonth(day, calendarMonth);
+                          const hasOperationalItems = dayJobs.length > 0 || arrivals.length > 0 || departures.length > 0;
+
+                          return (
+                            <div
+                              key={dateValue}
+                              className={`min-h-28 bg-white p-2 ${isCurrentMonth ? "" : "bg-brand-muted/40 text-stone-400"} ${
+                                dateValue === todayValue ? "ring-1 ring-inset ring-brand-focus" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openAddClean(dateValue)}
+                                  className={`inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+                                    dateValue === todayValue
+                                      ? "bg-brand-primary text-brand-primaryForeground"
+                                      : "hover:bg-brand-muted"
+                                  }`}
+                                  aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
+                                >
+                                  {format(day, "d")}
+                                </button>
+                                {hasOperationalItems ? (
+                                  <span className="text-[0.68rem] font-semibold text-brand-darkSlate">
+                                    {dayJobs.length > 0 ? `${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}` : ""}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="mt-2 grid gap-1.5">
+                                {departures.map((booking) => renderBookingBoundary(booking, "departure"))}
+                                {dayJobs.map((job) => renderCleaningChip(job))}
+                                {arrivals.map((booking) => renderBookingBoundary(booking, "arrival"))}
+                                {!hasOperationalItems && occupied.length > 0 ? (
+                                  <p className="truncate rounded-sm bg-brand-muted px-1.5 py-1 text-xs text-stone-600">
+                                    {getOccupiedPropertySummary(occupied)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {laneCount > 0 ? (
+                        <div className="border-t border-brand-border bg-white px-1.5 py-2">
+                          <div
+                            className="grid grid-cols-7 gap-y-1"
+                            style={{ gridTemplateRows: `repeat(${laneCount}, minmax(1.75rem, auto))` }}
+                          >
+                            {stayWeek?.segments.map((segment) => {
+                              const booking = bookingsById.get(segment.bookingId);
+
+                              if (!booking) {
+                                return null;
+                              }
+
+                              const tone = propertyTonesById.get(booking.propertyId) ?? propertyTonePalette[0];
+
+                              return (
+                                <button
+                                  key={`${segment.bookingId}-${segment.weekStart}-${segment.startColumn}`}
+                                  type="button"
+                                  onClick={() => openBooking(booking)}
+                                  title={`${booking.guestName || "Guest"} - ${booking.propertyName}${
+                                    booking.channelName ? ` - ${booking.channelName}` : ""
+                                  }`}
+                                  className={`mx-0.5 flex min-h-7 min-w-0 items-center gap-1 border px-2 text-left text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+                                    segment.startsAtBookingStart ? "rounded-l-md border-l-4" : "rounded-l-none border-l"
+                                  } ${segment.endsAtBookingEnd ? "rounded-r-md" : "rounded-r-none"}`}
+                                  style={{
+                                    gridColumn: `${segment.startColumn} / ${segment.endColumn}`,
+                                    gridRow: segment.lane + 1,
+                                    backgroundColor: tone.background,
+                                    borderColor: tone.accent,
+                                    color: tone.text
+                                  }}
+                                >
+                                  {segment.continuesBefore ? (
+                                    <ChevronLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  ) : null}
+                                  <span className="truncate">
+                                    {getGuestShortName(booking.guestName)} - {booking.propertyName}
+                                  </span>
+                                  {booking.channelName ? (
+                                    <span className="ml-auto hidden shrink-0 rounded-sm bg-white/60 px-1 text-[0.65rem] font-semibold xl:inline-flex">
+                                      {booking.channelName}
+                                    </span>
+                                  ) : null}
+                                  {segment.continuesAfter ? (
+                                    <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              );
-            })}
-        </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:hidden">
+              {calendarDays
+                .filter((day) => isSameMonth(day, calendarMonth))
+                .map((day) => {
+                  const dateValue = toDateInputValue(day);
+                  const dayJobs = jobsByDate.get(dateValue) ?? [];
+                  const arrivals = arrivalsByDate.get(dateValue) ?? [];
+                  const departures = departuresByDate.get(dateValue) ?? [];
+                  const occupied = occupancyByDate.get(dateValue) ?? [];
+                  const hasVisibleItems =
+                    dayJobs.length > 0 || arrivals.length > 0 || departures.length > 0 || occupied.length > 0;
+
+                  return (
+                    <div key={dateValue} className="rounded-lg border border-brand-border bg-white p-3">
+                      <button
+                        type="button"
+                        onClick={() => openAddClean(dateValue)}
+                        className="text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+                      >
+                        <span className="block text-sm font-semibold text-brand-ink">{format(day, "EEE d MMM")}</span>
+                        <span className="block text-xs text-stone-500">
+                          {!hasVisibleItems
+                            ? "No cleans or stays"
+                            : `${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}, ${departures.length} departure${
+                                departures.length === 1 ? "" : "s"
+                              }, ${arrivals.length} arrival${arrivals.length === 1 ? "" : "s"}`}
+                        </span>
+                      </button>
+
+                      {hasVisibleItems ? (
+                        <div className="mt-3 grid gap-2">
+                          {departures.map((booking) => renderBookingBoundary(booking, "departure"))}
+                          {dayJobs.map((job) => renderCleaningChip(job, "regular"))}
+                          {arrivals.map((booking) => renderBookingBoundary(booking, "arrival"))}
+                          {occupied.length > 0 && arrivals.length === 0 && departures.length === 0 ? (
+                            <p className="rounded-md bg-brand-muted px-3 py-2 text-sm text-stone-600">
+                              {getOccupiedPropertySummary(occupied)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </div>
+          </>
+        ) : (
+          <div className="grid gap-4">
+            <section className="border-b border-brand-border pb-4">
+              <h3 className="text-sm font-semibold text-brand-ink">Today, {formatDateHeading(todayValue)}</h3>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {(propertyFilter === allPropertiesValue
+                  ? properties
+                  : properties.filter((property) => property.id === propertyFilter)
+                ).map((property) => {
+                  const todayJobs = (jobsByDate.get(todayValue) ?? []).filter((job) => job.propertyId === property.id);
+                  const isOccupied = (occupancyByDate.get(todayValue) ?? []).some(
+                    (booking) => booking.propertyId === property.id
+                  );
+
+                  return (
+                    <div key={property.id} className="grid gap-1 border-l-4 border-brand-border bg-brand-muted px-3 py-2">
+                      <p className="truncate text-sm font-semibold text-brand-ink">{property.name}</p>
+                      <p className="text-sm text-stone-600">
+                        {todayJobs.length > 0
+                          ? `${todayJobs.length} clean${todayJobs.length === 1 ? "" : "s"} today`
+                          : isOccupied
+                            ? "Occupied"
+                            : "No clean scheduled"}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {agendaDateGroups.length > 0 ? (
+              <div className="grid gap-4">
+                {agendaDateGroups.map(([dateValue, dateJobs]) => (
+                  <section key={dateValue} className="grid gap-2 border-b border-brand-border pb-4 last:border-b-0 last:pb-0">
+                    <div>
+                      <h3 className="text-sm font-semibold text-brand-ink">{formatDateHeading(dateValue)}</h3>
+                      <p className="text-xs text-stone-500">
+                        {dateJobs.length} clean{dateJobs.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {dateJobs.map((job) => renderCleaningChip(job, "regular"))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-md bg-brand-muted px-3 py-3 text-sm text-stone-600">
+                No upcoming cleaning jobs match the current property filter.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <ModalSheet title="Add clean" isOpen={Boolean(addCleanDraft)} onClose={closeAddClean}>
@@ -714,12 +1075,12 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                 <div className="grid gap-1 rounded-md bg-white px-3 py-2 text-sm text-stone-700">
                   <p className="font-semibold text-brand-ink">Booking changeover</p>
                   <p>
-                    Departing: {addCleanDraft.departingGuestName ?? "Guest"} · Checkout{" "}
+                    Departing: {addCleanDraft.departingGuestName ?? "Guest"} - Checkout{" "}
                     {formatTime(addCleanDraft.departingCheckout, "not set")}
                   </p>
                   <p>
                     Next arrival: {addCleanDraft.nextGuestName ?? "None on this date"}
-                    {addCleanDraft.nextGuestName ? ` · Check-in ${formatTime(addCleanDraft.nextCheckIn, "not set")}` : ""}
+                    {addCleanDraft.nextGuestName ? ` - Check-in ${formatTime(addCleanDraft.nextCheckIn, "not set")}` : ""}
                   </p>
                 </div>
               ) : null}
@@ -955,7 +1316,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                       href={`/admin/jobs/${job.id}`}
                       className="rounded-md bg-brand-muted px-3 py-2 text-sm font-semibold text-brand-ink"
                     >
-                      {cleaningTypeLabels[job.cleaningType]} · {formatDate(job.scheduledDate)} · {statusLabels[job.status]}
+                      {cleaningTypeLabels[job.cleaningType]} - {formatDate(job.scheduledDate)} - {statusLabels[job.status]}
                     </Link>
                   ))}
                 </div>
