@@ -71,7 +71,7 @@ type CleaningJobCalendarItem = {
   expectedStartTime: string | null;
   cleaningType: CleaningType;
   status: CleaningJobStatus;
-  assignedCleanerName: string | null;
+  assignedResourceName: string | null;
   completedAt: string | null;
   requiresReview: boolean;
   bookingId: string | null;
@@ -236,10 +236,6 @@ function getGuestDisplayName(name: string) {
   return name.trim() || "Guest";
 }
 
-function getFirstName(name: string) {
-  return name.trim().split(/\s+/).filter(Boolean)[0] ?? name;
-}
-
 function formatTime(time: string | null | undefined, fallback = "Not set") {
   return time ? time.slice(0, 5) : fallback;
 }
@@ -335,11 +331,11 @@ function getCleaningChipText(job: CleaningJobCalendarItem) {
   }
 
   if (job.status === "awaiting_cleaner_response") {
-    return job.assignedCleanerName ? getFirstName(job.assignedCleanerName) : "Confirmed - Unassigned";
+    return job.assignedResourceName ?? "Confirmed - Unassigned";
   }
 
-  if (job.assignedCleanerName) {
-    return getFirstName(job.assignedCleanerName);
+  if (job.assignedResourceName) {
+    return job.assignedResourceName;
   }
 
   return "Unassigned";
@@ -362,7 +358,7 @@ function getCleaningChipClasses(job: CleaningJobCalendarItem) {
     return "border-brand-slate bg-brand-light text-brand-ink";
   }
 
-  if (!job.assignedCleanerName) {
+  if (!job.assignedResourceName) {
     return "border-amber-200 bg-amber-50 text-amber-900";
   }
 
@@ -374,7 +370,7 @@ function getCleaningChipIcon(job: CleaningJobCalendarItem) {
     return <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
   }
 
-  if (job.status === "requires_review" || job.requiresReview || job.bookingChangeRequiresReview || !job.assignedCleanerName) {
+  if (job.status === "requires_review" || job.requiresReview || job.bookingChangeRequiresReview || !job.assignedResourceName) {
     return <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
   }
 
@@ -747,7 +743,7 @@ export function JobsCalendarClient({
             ? ` - ${formatTime(job.expectedStartTime)}`
             : ` - ${getCleaningJobStatusLabel({
                 status: job.status,
-                assignedCleanerName: job.assignedCleanerName,
+                assignedResourceName: job.assignedResourceName,
                 requiresReview: job.requiresReview,
                 bookingChangeRequiresReview: job.bookingChangeRequiresReview
               })}`}
@@ -775,7 +771,7 @@ export function JobsCalendarClient({
         <span className="text-xs opacity-80">
           {getCleaningJobStatusLabel({
             status: job.status,
-            assignedCleanerName: job.assignedCleanerName,
+            assignedResourceName: job.assignedResourceName,
             requiresReview: job.requiresReview,
             bookingChangeRequiresReview: job.bookingChangeRequiresReview
           })}

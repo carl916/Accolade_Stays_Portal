@@ -15,7 +15,8 @@ type CleaningJobRow = Pick<
   | "expected_start_time"
   | "status"
   | "cleaning_type"
-  | "assigned_cleaner_id"
+  | "assigned_cleaning_resource_id"
+  | "assigned_cleaning_resource_name"
   | "completed_at"
   | "requires_review"
   | "smoobu_booking_id"
@@ -23,7 +24,6 @@ type CleaningJobRow = Pick<
   | "booking_change_reason"
 > & {
   properties: Pick<Database["public"]["Tables"]["properties"]["Row"], "name"> | null;
-  assigned_cleaner: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name"> | null;
 };
 
 type PropertyRow = Pick<
@@ -146,7 +146,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
     supabase
       .from("cleaning_jobs")
       .select(
-        "id,property_id,scheduled_date,expected_start_time,status,cleaning_type,assigned_cleaner_id,completed_at,requires_review,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name),assigned_cleaner:profiles!cleaning_jobs_assigned_cleaner_id_fkey(full_name)"
+        "id,property_id,scheduled_date,expected_start_time,status,cleaning_type,assigned_cleaning_resource_id,assigned_cleaning_resource_name,completed_at,requires_review,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name)"
       )
       .order("scheduled_date", { ascending: true }),
     supabase
@@ -296,7 +296,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
           expectedStartTime: job.expected_start_time,
           cleaningType: job.cleaning_type,
           status: job.status,
-          assignedCleanerName: job.assigned_cleaner?.full_name ?? null,
+          assignedResourceName: job.assigned_cleaning_resource_name,
           completedAt: job.completed_at,
           requiresReview: job.requires_review,
           bookingId: job.smoobu_booking_id,

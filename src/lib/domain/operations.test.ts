@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   bedroomSetupBedConfigurations,
   bedroomSetupPhysicalBedTypes,
+  calculateActualLabourMinutes,
+  calculateElapsedCleaningMinutes,
+  calculateExpectedElapsedMinutes,
+  calculateLabourVarianceMinutes,
   canCleanerAccessJob,
   canManageOperations,
   canManageSettings,
   canTransitionCleaningJobStatus,
+  cleaningResourceTypes,
   cleaningTypes,
   defaultGuestCheckInTime,
   formatBedConfiguration,
+  formatCleaningDurationAsTime,
   formatCleaningDurationForClean,
   formatCleaningDurationForPropertyCard,
   formatCleaningDurationForPropertyDetail,
@@ -16,9 +22,12 @@ import {
   getBedConfigurationAction,
   getCleaningJobStatusLabel,
   getDefaultGuestArrivalDeadlineIso,
+  getDefaultLabourMultiplier,
+  getEffectiveLabourMultiplier,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
+  isLongCleanByLabour,
   isCleaningJobNeedsManagerReview,
   isRoleAllowed,
   requiresReviewForFinalBedConfiguration,
@@ -39,7 +48,7 @@ describe("operations domain rules", () => {
     expect(canManageSettings("cleaner")).toBe(false);
   });
 
-  it("limits cleaner job access to their own assigned jobs", () => {
+  it("limits cleaner job access to their own assigned jobs or assigned resource login", () => {
     expect(
       canCleanerAccessJob({
         role: "cleaner",
@@ -55,6 +64,15 @@ describe("operations domain rules", () => {
         assignedCleanerId: "user-2"
       })
     ).toBe(false);
+
+    expect(
+      canCleanerAccessJob({
+        role: "cleaner",
+        userId: "user-1",
+        assignedCleanerId: null,
+        assignedResourcePrimaryUserId: "user-1"
+      })
+    ).toBe(true);
   });
 
   it("maps roles to their dashboard routes", () => {
@@ -133,6 +151,56 @@ describe("operations domain rules", () => {
 
   it("keeps initial cleaning types aligned with the MVP", () => {
     expect(cleaningTypes).toEqual(["standard_changeover", "mid_stay_clean", "deep_or_remedial_clean", "other"]);
+  });
+
+  it("models individual and pair cleaning resources as one assignable option", () => {
+    expect(cleaningResourceTypes).toEqual(["individual", "pair"]);
+    expect(getDefaultLabourMultiplier("individual")).toBe(1);
+    expect(getDefaultLabourMultiplier("pair")).toBe(2);
+  });
+
+  it("calculates expected working time from expected labour and assigned resource", () => {
+    expect(calculateExpectedElapsedMinutes({ expectedLabourMinutes: 150, labourMultiplier: 1 })).toBe(150);
+    expect(calculateExpectedElapsedMinutes({ expectedLabourMinutes: 150, labourMultiplier: 2 })).toBe(75);
+    expect(formatCleaningDurationAsTime(75)).toBe("1 hour 15 minutes");
+  });
+
+  it("calculates actual labour from elapsed clean time and effective multiplier", () => {
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 120, effectiveLabourMultiplier: 1 })).toBe(120);
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 90, effectiveLabourMultiplier: 2 })).toBe(180);
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 75, effectiveLabourMultiplier: 2 })).toBe(150);
+  });
+
+  it("allows a pair to work solo without doubling actual labour", () => {
+    const effectiveMultiplier = getEffectiveLabourMultiplier({
+      resourceType: "pair",
+      assignedLabourMultiplier: 2,
+      workingMode: "solo"
+    });
+
+    expect(effectiveMultiplier).toBe(1);
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 120, effectiveLabourMultiplier: effectiveMultiplier })).toBe(120);
+  });
+
+  it("keeps historic labour calculations tied to the effective multiplier snapshot", () => {
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 90, effectiveLabourMultiplier: 2 })).toBe(180);
+    expect(calculateActualLabourMinutes({ elapsedMinutes: 90, effectiveLabourMultiplier: 1 })).toBe(90);
+  });
+
+  it("compares expected against actual labour while elapsed time remains clock time", () => {
+    const elapsedMinutes = calculateElapsedCleaningMinutes({
+      startedAt: "2026-08-08T10:30:00.000Z",
+      completedAt: "2026-08-08T12:00:00.000Z"
+    });
+    const actualLabourMinutes = calculateActualLabourMinutes({
+      elapsedMinutes: elapsedMinutes ?? 0,
+      effectiveLabourMultiplier: 2
+    });
+
+    expect(elapsedMinutes).toBe(90);
+    expect(actualLabourMinutes).toBe(180);
+    expect(calculateLabourVarianceMinutes({ expectedLabourMinutes: 150, actualLabourMinutes })).toBe(30);
+    expect(isLongCleanByLabour({ expectedLabourMinutes: 150, actualLabourMinutes })).toBe(false);
   });
 
   it("formats and validates supported property cleaning durations", () => {

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarClock, CheckCircle2, MessageSquare, Settings2, UserCheck } from "lucide-react";
+import { ArrowLeft, CalendarClock, CheckCircle2, Clock, MessageSquare, Settings2, UserCheck } from "lucide-react";
 import Link from "next/link";
 import {
   addCleaningJobComment,
@@ -7,14 +7,23 @@ import {
   updateCleaningJobReview
 } from "@/lib/admin/job-actions";
 import {
+  calculateActualLabourMinutes,
+  calculateElapsedCleaningMinutes,
+  calculateExpectedElapsedMinutes,
+  calculateLabourVarianceMinutes,
   formatBedConfiguration,
+  formatCleaningDurationAsTime,
   formatCleaningDurationForClean,
+  getCleaningResourceTypeLabel,
   getCleaningJobStatusLabel,
+  getWorkingModeLabel,
   isCleaningJobNeedsManagerReview,
   supportedCleaningDurations,
   type AppRole,
   type BedConfiguration,
   type CleaningJobStatus,
+  type CleaningResourceType,
+  type CleaningResourceWorkingMode,
   type CleaningType
 } from "@/lib/domain/operations";
 import type { Json } from "@/lib/supabase/types";
@@ -31,8 +40,17 @@ export type CleaningJobReviewJob = {
   status: CleaningJobStatus;
   instructions: string;
   notes: string;
+  assignedCleaningResourceId: string | null;
+  assignedCleaningResourceName: string | null;
+  assignedCleaningResourceType: CleaningResourceType | null;
+  assignedCleaningResourceLabourMultiplier: number | null;
   assignedCleanerId: string | null;
-  assignedCleanerName: string | null;
+  workingMode: CleaningResourceWorkingMode | null;
+  effectiveLabourMultiplier: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  actualDurationMinutes: number | null;
+  actualLabourMinutes: number | null;
   requiresReview: boolean;
   bookingChangeRequiresReview: boolean;
   bookingChangeReason: string | null;
@@ -45,10 +63,13 @@ export type CleaningJobReviewBedroom = BedSetupSummaryBedroom & {
   permittedConfigurations: BedConfiguration[];
 };
 
-export type CleaningJobReviewCleaner = {
+export type CleaningJobReviewResource = {
   id: string;
-  fullName: string;
-  email: string | null;
+  name: string;
+  resourceType: CleaningResourceType;
+  labourMultiplier: number;
+  primaryUserName: string | null;
+  primaryUserEmail: string | null;
 };
 
 export type CleaningJobReviewComment = {
@@ -70,7 +91,7 @@ export type CleaningJobReviewAuditEvent = {
 type CleaningJobReviewProps = {
   job: CleaningJobReviewJob;
   bedrooms: CleaningJobReviewBedroom[];
-  cleaners: CleaningJobReviewCleaner[];
+  cleaningResources: CleaningJobReviewResource[];
   comments: CleaningJobReviewComment[];
   auditEvents: CleaningJobReviewAuditEvent[];
   currentRole: AppRole;
@@ -109,6 +130,10 @@ function formatDateTime(value: string) {
     minute: "2-digit",
     timeZone: "Europe/London"
   }).format(new Date(value));
+}
+
+function formatOptionalDateTime(value: string | null) {
+  return value ? formatDateTime(value) : "Not recorded";
 }
 
 function getMinutes(time: string | null) {
@@ -175,13 +200,22 @@ function formatAuditEvent(event: CleaningJobReviewAuditEvent) {
     return "Cleaner removed";
   }
 
+  if (event.action === "cleaning_resource_assigned") {
+    const name = getJsonString(event.newValue, "cleaning_resource_name");
+    return `Cleaning team assigned${name ? `: ${name}` : ""}`;
+  }
+
+  if (event.action === "cleaning_resource_unassigned") {
+    return "Cleaning team removed";
+  }
+
   return event.action.replaceAll("_", " ");
 }
 
 export function CleaningJobReview({
   job,
   bedrooms,
-  cleaners,
+  cleaningResources,
   comments,
   auditEvents,
   currentRole,
@@ -199,6 +233,30 @@ export function CleaningJobReview({
     bookingChangeRequiresReview: job.bookingChangeRequiresReview
   });
   const turnaround = formatTurnaround(job.checkoutTime, job.nextArrivalTime);
+  const expectedWorkingMinutes = job.assignedCleaningResourceLabourMultiplier
+    ? calculateExpectedElapsedMinutes({
+        expectedLabourMinutes: job.expectedDurationMinutes,
+        labourMultiplier: job.assignedCleaningResourceLabourMultiplier
+      })
+    : null;
+  const elapsedMinutes =
+    job.actualDurationMinutes ??
+    calculateElapsedCleaningMinutes({
+      startedAt: job.startedAt,
+      completedAt: job.completedAt
+    });
+  const actualLabourMinutes =
+    job.actualLabourMinutes ??
+    (elapsedMinutes === null || !job.effectiveLabourMultiplier
+      ? null
+      : calculateActualLabourMinutes({
+          elapsedMinutes,
+          effectiveLabourMultiplier: job.effectiveLabourMultiplier
+        }));
+  const labourVarianceMinutes = calculateLabourVarianceMinutes({
+    expectedLabourMinutes: job.expectedDurationMinutes,
+    actualLabourMinutes
+  });
   const activity = [
     ...comments.map((comment) => ({
       id: `comment-${comment.id}`,
@@ -234,7 +292,7 @@ export function CleaningJobReview({
           <span className="inline-flex w-fit rounded-md bg-brand-muted px-3 py-2 text-sm font-semibold text-brand-darkSlate">
             {getCleaningJobStatusLabel({
               status: job.status,
-              assignedCleanerName: job.assignedCleanerName,
+              assignedResourceName: job.assignedCleaningResourceName,
               requiresReview: job.requiresReview,
               bookingChangeRequiresReview: job.bookingChangeRequiresReview
             })}
@@ -271,10 +329,13 @@ export function CleaningJobReview({
           <p className="text-sm font-semibold text-brand-ink">{turnaround ?? "Not time-critical"}</p>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-normal text-stone-500">Expected clean</p>
+          <p className="text-xs font-semibold uppercase tracking-normal text-stone-500">Expected labour</p>
           <p className="text-sm font-semibold text-brand-ink">
-            {formatCleaningDurationForClean(job.expectedDurationMinutes)}
+            {formatCleaningDurationAsTime(job.expectedDurationMinutes)}
           </p>
+          {expectedWorkingMinutes && expectedWorkingMinutes !== job.expectedDurationMinutes ? (
+            <p className="text-xs text-stone-600">Approx. {formatCleaningDurationAsTime(expectedWorkingMinutes)} working time</p>
+          ) : null}
         </div>
       </section>
 
@@ -292,34 +353,97 @@ export function CleaningJobReview({
           <h2 className="text-base font-semibold text-brand-ink">Assignment</h2>
         </div>
         <p className="text-sm text-stone-700">
-          Cleaner: <span className="font-semibold text-brand-ink">{job.assignedCleanerName ?? "Unassigned"}</span>
+          Cleaning team:{" "}
+          <span className="font-semibold text-brand-ink">{job.assignedCleaningResourceName ?? "Unassigned"}</span>
+          {job.assignedCleaningResourceType ? (
+            <span className="ml-2 text-xs font-semibold text-stone-500">
+              {getCleaningResourceTypeLabel(job.assignedCleaningResourceType)}
+            </span>
+          ) : null}
         </p>
+        {job.assignedCleaningResourceType === "pair" && job.workingMode ? (
+          <p className="text-sm text-stone-700">
+            Worked: <span className="font-semibold text-brand-ink">{getWorkingModeLabel(job.workingMode)}</span>
+          </p>
+        ) : null}
         {canEditJob ? (
           <form action={assignCleanerToJob} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="returnPath" value={returnPath} />
             <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-              Cleaner
+              Cleaner / team
               <select
-                name="cleanerId"
-                defaultValue={job.assignedCleanerId ?? ""}
+                name="cleaningResourceId"
+                defaultValue={job.assignedCleaningResourceId ?? ""}
                 className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
               >
                 <option value="">Unassigned</option>
-                {cleaners.map((cleaner) => (
-                  <option key={cleaner.id} value={cleaner.id}>
-                    {cleaner.fullName}
-                    {cleaner.email ? ` - ${cleaner.email}` : ""}
+                {cleaningResources.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.name} - {getCleaningResourceTypeLabel(resource.resourceType)}
+                    {resource.primaryUserName
+                      ? ` - Login: ${resource.primaryUserName}${resource.primaryUserEmail ? ` (${resource.primaryUserEmail})` : ""}`
+                      : " - No login"}
                   </option>
                 ))}
               </select>
             </label>
             <FormSubmitButton pendingLabel="Assigning..." className="sm:w-auto">
-              {job.assignedCleanerId ? "Update cleaner" : "Assign cleaner"}
+              {job.assignedCleaningResourceId ? "Update team" : "Assign team"}
             </FormSubmitButton>
           </form>
         ) : null}
       </section>
+
+      {job.startedAt || job.completedAt || elapsedMinutes !== null || actualLabourMinutes !== null ? (
+        <section className="grid gap-3 rounded-md border border-brand-border bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-brand-moss" aria-hidden="true" />
+            <h2 className="text-base font-semibold text-brand-ink">Timing</h2>
+          </div>
+          <div className="grid gap-2 text-sm text-stone-700 sm:grid-cols-2 lg:grid-cols-4">
+            <p>
+              <span className="font-semibold text-brand-ink">Started</span>
+              <br />
+              {formatOptionalDateTime(job.startedAt)}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-ink">Completed</span>
+              <br />
+              {formatOptionalDateTime(job.completedAt)}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-ink">Elapsed clean</span>
+              <br />
+              {elapsedMinutes === null ? "Not recorded" : formatCleaningDurationAsTime(elapsedMinutes)}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-ink">Actual labour</span>
+              <br />
+              {actualLabourMinutes === null ? "Not recorded" : formatCleaningDurationAsTime(actualLabourMinutes)}
+            </p>
+          </div>
+          <div className="grid gap-2 text-sm text-stone-700 sm:grid-cols-3">
+            <p>
+              <span className="font-semibold text-brand-ink">Expected labour</span>
+              <br />
+              {formatCleaningDurationAsTime(job.expectedDurationMinutes)}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-ink">Expected working time</span>
+              <br />
+              {expectedWorkingMinutes === null ? "Assign a team first" : `Approx. ${formatCleaningDurationAsTime(expectedWorkingMinutes)}`}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-ink">Labour variance</span>
+              <br />
+              {labourVarianceMinutes === null
+                ? "Not recorded"
+                : `${labourVarianceMinutes >= 0 ? "+" : "-"}${formatCleaningDurationAsTime(Math.abs(labourVarianceMinutes))}`}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {canEditJob ? (
         <details className="rounded-md border border-brand-border bg-white shadow-sm">
@@ -331,7 +455,7 @@ export function CleaningJobReview({
             <input type="hidden" name="jobId" value={job.id} />
             <input type="hidden" name="returnPath" value={returnPath} />
             <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-              Expected duration
+              Expected labour
               <select
                 name="expectedDurationMinutes"
                 defaultValue={String(job.expectedDurationMinutes)}

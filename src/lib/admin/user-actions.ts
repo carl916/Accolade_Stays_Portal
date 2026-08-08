@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
-import { appRoleSchema } from "@/lib/domain/operations";
+import { appRoleSchema, cleaningResourceTypeSchema, getDefaultLabourMultiplier } from "@/lib/domain/operations";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/types";
 
 const inviteUserSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the user's name."),
@@ -18,6 +19,15 @@ const updateUserSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the user's name."),
   role: appRoleSchema,
   isActive: z.enum(["active", "inactive"])
+});
+const cleaningResourceFormSchema = z.object({
+  name: z.string().trim().min(2, "Enter the cleaner or team name."),
+  resourceType: cleaningResourceTypeSchema,
+  primaryUserId: z.string().uuid("Choose a valid primary login.").optional(),
+  isActive: z.enum(["active", "inactive"]).default("active")
+});
+const updateCleaningResourceFormSchema = cleaningResourceFormSchema.extend({
+  resourceId: z.string().uuid("Choose a cleaning resource.")
 });
 
 function getFormString(formData: FormData, key: string) {
@@ -31,6 +41,24 @@ function redirectWithError(message: string): never {
 
 function redirectWithSuccess(message: string): never {
   redirect(`/admin/users?success=${encodeURIComponent(message)}`);
+}
+
+async function validatePrimaryCleanerLogin(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, userId: string | undefined) {
+  if (!userId) {
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .eq("role", "cleaner")
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error || !data) {
+    redirectWithError(error?.message ?? "Choose an active cleaner as the primary login.");
+  }
 }
 
 export async function inviteUser(formData: FormData) {
@@ -72,6 +100,23 @@ export async function inviteUser(formData: FormData) {
     redirectWithError(profileError.message);
   }
 
+  if (parsed.data.role === "cleaner") {
+    const { error: resourceError } = await supabase.from("cleaning_resources").upsert(
+      {
+        name: parsed.data.fullName,
+        resource_type: "individual",
+        labour_multiplier: 1,
+        primary_user_id: data.user.id,
+        is_active: true
+      } satisfies Database["public"]["Tables"]["cleaning_resources"]["Insert"],
+      { onConflict: "name" }
+    );
+
+    if (resourceError) {
+      redirectWithError(resourceError.message);
+    }
+  }
+
   revalidatePath("/admin/users");
   redirectWithSuccess("Invite sent.");
 }
@@ -110,4 +155,76 @@ export async function updateUserProfile(formData: FormData) {
   revalidatePath("/admin/users");
   revalidatePath("/", "layout");
   redirectWithSuccess("User updated.");
+}
+
+export async function createCleaningResource(formData: FormData) {
+  await requireRole(["administrator"]);
+  const parsed = cleaningResourceFormSchema.safeParse({
+    name: getFormString(formData, "name"),
+    resourceType: getFormString(formData, "resourceType"),
+    primaryUserId: getFormString(formData, "primaryUserId") || undefined,
+    isActive: "active"
+  });
+
+  if (!parsed.success) {
+    redirectWithError(parsed.error.issues[0]?.message ?? "Check the cleaner or team details.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  await validatePrimaryCleanerLogin(supabase, parsed.data.primaryUserId);
+
+  const resourceInsert = {
+    name: parsed.data.name,
+    resource_type: parsed.data.resourceType,
+    labour_multiplier: getDefaultLabourMultiplier(parsed.data.resourceType),
+    primary_user_id: parsed.data.primaryUserId ?? null,
+    is_active: true
+  } satisfies Database["public"]["Tables"]["cleaning_resources"]["Insert"];
+  const { error } = await supabase.from("cleaning_resources").insert(resourceInsert as never);
+
+  if (error) {
+    redirectWithError(error.message);
+  }
+
+  revalidatePath("/admin/users");
+  redirectWithSuccess("Cleaning resource created.");
+}
+
+export async function updateCleaningResource(formData: FormData) {
+  await requireRole(["administrator"]);
+  const parsed = updateCleaningResourceFormSchema.safeParse({
+    resourceId: getFormString(formData, "resourceId"),
+    name: getFormString(formData, "name"),
+    resourceType: getFormString(formData, "resourceType"),
+    primaryUserId: getFormString(formData, "primaryUserId") || undefined,
+    isActive: getFormString(formData, "isActive")
+  });
+
+  if (!parsed.success) {
+    redirectWithError(parsed.error.issues[0]?.message ?? "Check the cleaner or team details.");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  await validatePrimaryCleanerLogin(supabase, parsed.data.primaryUserId);
+
+  const resourceUpdate = {
+    name: parsed.data.name,
+    resource_type: parsed.data.resourceType,
+    labour_multiplier: getDefaultLabourMultiplier(parsed.data.resourceType),
+    primary_user_id: parsed.data.primaryUserId ?? null,
+    is_active: parsed.data.isActive === "active"
+  } satisfies Database["public"]["Tables"]["cleaning_resources"]["Update"];
+  const { error } = await supabase
+    .from("cleaning_resources")
+    .update(resourceUpdate as never)
+    .eq("id", parsed.data.resourceId);
+
+  if (error) {
+    redirectWithError(error.message);
+  }
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/jobs");
+  revalidatePath("/manager");
+  redirectWithSuccess("Cleaning resource updated.");
 }
