@@ -1,11 +1,22 @@
 import { requireRole } from "@/lib/auth/session";
+import Link from "next/link";
+import { canManageSettings } from "@/lib/domain/operations";
+import { syncSmoobuBookingsNow } from "@/lib/admin/smoobu-actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
 import { JobsCalendarClient } from "@/components/admin/JobsCalendarClient";
+import { createSmoobuClient, SmoobuConfigurationError } from "@/lib/smoobu/client";
 
 type CleaningJobRow = Pick<
   Database["public"]["Tables"]["cleaning_jobs"]["Row"],
-  "id" | "property_id" | "scheduled_date" | "status" | "cleaning_type"
+  | "id"
+  | "property_id"
+  | "scheduled_date"
+  | "status"
+  | "cleaning_type"
+  | "smoobu_booking_id"
+  | "booking_change_requires_review"
+  | "booking_change_reason"
 > & {
   properties: Pick<Database["public"]["Tables"]["properties"]["Row"], "name"> | null;
 };
@@ -25,12 +36,62 @@ type BedroomRow = Pick<
   >[];
 };
 
+type BookingRow = Pick<
+  Database["public"]["Tables"]["smoobu_bookings"]["Row"],
+  | "id"
+  | "property_id"
+  | "smoobu_reservation_id"
+  | "smoobu_reference_id"
+  | "smoobu_apartment_id"
+  | "smoobu_apartment_name"
+  | "channel_name"
+  | "booking_type"
+  | "arrival_date"
+  | "departure_date"
+  | "previous_arrival_date"
+  | "previous_departure_date"
+  | "check_in_time"
+  | "check_out_time"
+  | "guest_name"
+  | "guest_email"
+  | "guest_phone"
+  | "adults"
+  | "children"
+  | "guest_language"
+  | "guest_id"
+  | "guest_app_url"
+  | "notice"
+  | "is_cancelled"
+  | "clean_review_required"
+  | "clean_review_reason"
+  | "last_synced_at"
+  | "messages_need_refresh"
+>;
+
+type SyncRunRow = Pick<
+  Database["public"]["Tables"]["smoobu_sync_runs"]["Row"],
+  | "status"
+  | "completed_at"
+  | "last_successful_sync_at"
+  | "error_message"
+  | "records_created"
+  | "records_updated"
+  | "records_cancelled"
+  | "records_failed"
+>;
+
+type MappingRow = Pick<
+  Database["public"]["Tables"]["smoobu_property_mappings"]["Row"],
+  "smoobu_apartment_id" | "is_active"
+>;
+
 type AdminJobsPageProps = {
   searchParams?: Promise<{
     addClean?: string;
     propertyId?: string;
     scheduledDate?: string;
     propertyLocked?: string;
+    bookingId?: string;
     error?: string;
   }>;
 };
@@ -53,13 +114,21 @@ function getRecoveredError(params: Awaited<AdminJobsPageProps["searchParams"]>) 
 }
 
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
-  await requireRole(["administrator"]);
+  const profile = await requireRole(["administrator", "cleaning_manager"]);
+  const canManageSmoobu = canManageSettings(profile.role);
   const resolvedSearchParams = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const [{ data: jobData, error: jobsError }, { data: propertyData }, { data: bedroomData }] = await Promise.all([
+  const [
+    { data: jobData, error: jobsError },
+    { data: propertyData },
+    { data: bedroomData },
+    { data: bookingData },
+    { data: syncRunData },
+    { data: mappingData }
+  ] = await Promise.all([
     supabase
       .from("cleaning_jobs")
-      .select("id,property_id,scheduled_date,status,cleaning_type,properties(name)")
+      .select("id,property_id,scheduled_date,status,cleaning_type,smoobu_booking_id,booking_change_requires_review,booking_change_reason,properties(name)")
       .order("scheduled_date", { ascending: true }),
     supabase
       .from("properties")
@@ -70,21 +139,62 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
       .from("bedrooms")
       .select("id,property_id,name,physical_bed_type,current_configuration,bedroom_permitted_configurations(configuration,is_active)")
       .eq("is_active", true)
-      .order("name")
+      .order("name"),
+    supabase
+      .from("smoobu_bookings")
+      .select(
+        "id,property_id,smoobu_reservation_id,smoobu_reference_id,smoobu_apartment_id,smoobu_apartment_name,channel_name,booking_type,arrival_date,departure_date,previous_arrival_date,previous_departure_date,check_in_time,check_out_time,guest_name,guest_email,guest_phone,adults,children,guest_language,guest_id,guest_app_url,notice,is_cancelled,clean_review_required,clean_review_reason,last_synced_at,messages_need_refresh"
+      )
+      .eq("is_blocked_booking", false)
+      .eq("is_cancelled", false)
+      .is("source_deleted_at", null)
+      .order("arrival_date", { ascending: true }),
+    supabase
+      .from("smoobu_sync_runs")
+      .select("status,completed_at,last_successful_sync_at,error_message,records_created,records_updated,records_cancelled,records_failed")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("smoobu_property_mappings")
+      .select("smoobu_apartment_id,is_active")
+      .eq("provider", "smoobu")
   ]);
   const jobs = (jobData ?? []) as CleaningJobRow[];
   const properties = (propertyData ?? []) as PropertyRow[];
   const bedrooms = (bedroomData ?? []) as BedroomRow[];
+  const bookings = (bookingData ?? []) as BookingRow[];
+  const latestSyncRun = syncRunData as SyncRunRow | null;
+  const mappings = (mappingData ?? []) as MappingRow[];
 
   const bedroomsByPropertyId = new Map<string, BedroomRow[]>();
   for (const bedroom of bedrooms) {
     bedroomsByPropertyId.set(bedroom.property_id, [...(bedroomsByPropertyId.get(bedroom.property_id) ?? []), bedroom]);
   }
 
+  let unmappedApartmentCount = 0;
+  let integrationWarning: string | undefined;
+  if (canManageSmoobu) {
+    try {
+      const apartments = await createSmoobuClient().getApartments();
+      const activeMappedApartmentIds = new Set(
+        mappings.filter((mapping) => mapping.is_active).map((mapping) => mapping.smoobu_apartment_id)
+      );
+      unmappedApartmentCount = apartments.filter((apartment) => !activeMappedApartmentIds.has(apartment.id)).length;
+    } catch (error) {
+      integrationWarning =
+        error instanceof SmoobuConfigurationError
+          ? "Smoobu credentials are not configured."
+          : "Smoobu apartment status could not be refreshed.";
+    }
+  }
+
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-normal text-brand-moss">Administrator</p>
+        <p className="text-sm font-semibold uppercase tracking-normal text-brand-moss">
+          {profile.role === "administrator" ? "Administrator" : "Cleaning manager"}
+        </p>
         <h1 className="mt-2 text-3xl font-semibold text-brand-ink">Cleaning jobs</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Schedule planned cleans from the calendar and review upcoming work across every property.
@@ -97,13 +207,57 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
         </p>
       ) : null}
 
+      {canManageSmoobu ? (
+        <section className="flex flex-col gap-3 rounded-lg border border-brand-border bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-brand-ink">Smoobu</p>
+            <p className="mt-1 text-sm text-stone-600">
+              {latestSyncRun?.last_successful_sync_at
+                ? `Last synced: ${new Intl.DateTimeFormat("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  }).format(new Date(latestSyncRun.last_successful_sync_at))}`
+                : "No successful sync yet"}
+              {" · "}
+              {mappings.filter((mapping) => mapping.is_active).length} properties mapped
+              {unmappedApartmentCount > 0 ? ` · ${unmappedApartmentCount} unmapped apartments` : ""}
+            </p>
+            {latestSyncRun?.error_message || integrationWarning ? (
+              <p className="mt-1 text-sm font-medium text-amber-700">
+                {latestSyncRun?.error_message ?? integrationWarning}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <form action={syncSmoobuBookingsNow}>
+              <button
+                type="submit"
+                className="min-h-11 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+              >
+                Sync now
+              </button>
+            </form>
+            <Link
+              href="/admin/properties"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-brand-slate px-4 text-sm font-semibold text-brand-ink transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+            >
+              Settings
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <JobsCalendarClient
         initialError={getRecoveredError(resolvedSearchParams)}
         initialModal={{
           isOpen: resolvedSearchParams?.addClean === "1" || Boolean(getRecoveredError(resolvedSearchParams)),
           scheduledDate: getSafeDateParam(resolvedSearchParams?.scheduledDate),
           propertyId: resolvedSearchParams?.propertyId,
-          propertyLocked: resolvedSearchParams?.propertyLocked === "1"
+          propertyLocked: resolvedSearchParams?.propertyLocked === "1",
+          bookingId: resolvedSearchParams?.bookingId
         }}
         properties={properties.map((property) => ({
           id: property.id,
@@ -125,7 +279,50 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
           propertyName: job.properties?.name ?? "Unknown property",
           scheduledDate: job.scheduled_date,
           cleaningType: job.cleaning_type,
-          status: job.status
+          status: job.status,
+          bookingId: job.smoobu_booking_id,
+          bookingChangeRequiresReview: job.booking_change_requires_review,
+          bookingChangeReason: job.booking_change_reason
+        }))}
+        bookings={bookings.map((booking) => ({
+          id: booking.id,
+          propertyId: booking.property_id,
+          propertyName:
+            properties.find((property) => property.id === booking.property_id)?.name ?? booking.smoobu_apartment_name,
+          smoobuReservationId: booking.smoobu_reservation_id,
+          smoobuReferenceId: booking.smoobu_reference_id,
+          smoobuApartmentName: booking.smoobu_apartment_name,
+          channelName: booking.channel_name,
+          bookingType: booking.booking_type,
+          arrivalDate: booking.arrival_date,
+          departureDate: booking.departure_date,
+          previousArrivalDate: booking.previous_arrival_date,
+          previousDepartureDate: booking.previous_departure_date,
+          checkInTime: booking.check_in_time,
+          checkOutTime: booking.check_out_time,
+          guestName: booking.guest_name,
+          guestEmail: booking.guest_email,
+          guestPhone: booking.guest_phone,
+          adults: booking.adults,
+          children: booking.children,
+          guestLanguage: booking.guest_language,
+          guestId: booking.guest_id,
+          guestAppUrl: booking.guest_app_url,
+          notice: booking.notice,
+          cleanReviewRequired: booking.clean_review_required,
+          cleanReviewReason: booking.clean_review_reason,
+          lastSyncedAt: booking.last_synced_at,
+          messagesNeedRefresh: booking.messages_need_refresh,
+          linkedJobs: jobs
+            .filter((job) => job.smoobu_booking_id === booking.id)
+            .map((job) => ({
+              id: job.id,
+              scheduledDate: job.scheduled_date,
+              status: job.status,
+              cleaningType: job.cleaning_type,
+              bookingChangeRequiresReview: job.booking_change_requires_review,
+              bookingChangeReason: job.booking_change_reason
+            }))
         }))}
       />
     </section>

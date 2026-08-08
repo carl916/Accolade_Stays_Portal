@@ -96,13 +96,17 @@ export function PrimaryNavigation({ profile }: PrimaryNavigationProps) {
       label: "Dashboard",
       isActive: pathname === homePath
     },
-    ...(profile.role === "administrator"
+    ...(profile.role === "administrator" || profile.role === "cleaning_manager"
       ? [
           {
             href: "/admin/jobs",
             label: "Jobs",
             isActive: isActivePath(pathname, "/admin/jobs")
-          },
+          }
+        ]
+      : []),
+    ...(profile.role === "administrator"
+      ? [
           {
             href: "/admin/properties",
             label: "Properties",

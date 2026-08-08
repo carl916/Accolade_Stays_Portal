@@ -231,6 +231,10 @@ export type Database = {
           notes: string;
           manager_notes: string;
           cleaner_notes: string;
+          smoobu_booking_id: string | null;
+          booking_change_requires_review: boolean;
+          booking_change_reason: string | null;
+          booking_context: Json;
           created_at: string;
           updated_at: string;
         };
@@ -264,6 +268,10 @@ export type Database = {
           notes?: string;
           manager_notes?: string;
           cleaner_notes?: string;
+          smoobu_booking_id?: string | null;
+          booking_change_requires_review?: boolean;
+          booking_change_reason?: string | null;
+          booking_context?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -297,6 +305,10 @@ export type Database = {
           notes?: string;
           manager_notes?: string;
           cleaner_notes?: string;
+          smoobu_booking_id?: string | null;
+          booking_change_requires_review?: boolean;
+          booking_change_reason?: string | null;
+          booking_context?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -329,6 +341,12 @@ export type Database = {
             foreignKeyName: "cleaning_jobs_property_id_fkey";
             columns: ["property_id"];
             referencedRelation: "properties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cleaning_jobs_smoobu_booking_id_fkey";
+            columns: ["smoobu_booking_id"];
+            referencedRelation: "smoobu_bookings";
             referencedColumns: ["id"];
           }
         ];
@@ -663,6 +681,364 @@ export type Database = {
           }
         ];
       };
+      smoobu_property_mappings: {
+        Row: {
+          id: string;
+          property_id: string;
+          provider: string;
+          smoobu_apartment_id: number;
+          smoobu_apartment_name: string;
+          is_active: boolean;
+          last_verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          provider?: string;
+          smoobu_apartment_id: number;
+          smoobu_apartment_name: string;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          provider?: string;
+          smoobu_apartment_id?: number;
+          smoobu_apartment_name?: string;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "smoobu_property_mappings_property_id_fkey";
+            columns: ["property_id"];
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      smoobu_bookings: {
+        Row: {
+          id: string;
+          property_id: string;
+          smoobu_reservation_id: number;
+          smoobu_reference_id: string | null;
+          smoobu_apartment_id: number;
+          smoobu_apartment_name: string;
+          smoobu_channel_id: number | null;
+          channel_name: string | null;
+          booking_type: string;
+          arrival_date: string;
+          departure_date: string;
+          previous_arrival_date: string | null;
+          previous_departure_date: string | null;
+          check_in_time: string | null;
+          check_out_time: string | null;
+          guest_name: string;
+          guest_email: string | null;
+          guest_phone: string | null;
+          adults: number | null;
+          children: number | null;
+          guest_language: string | null;
+          guest_id: number | null;
+          guest_app_url: string | null;
+          notice: string | null;
+          is_blocked_booking: boolean;
+          is_cancelled: boolean;
+          source_deleted_at: string | null;
+          booking_price: number | null;
+          price_paid: string | null;
+          prepayment: number | null;
+          prepayment_paid: string | null;
+          deposit: number | null;
+          deposit_paid: string | null;
+          smoobu_created_at: string | null;
+          smoobu_modified_at: string | null;
+          sync_status: string;
+          last_synced_at: string | null;
+          last_sync_error: string | null;
+          messages_last_webhook_at: string | null;
+          messages_need_refresh: boolean;
+          clean_review_required: boolean;
+          clean_review_reason: string | null;
+          raw_payload: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          property_id: string;
+          smoobu_reservation_id: number;
+          smoobu_reference_id?: string | null;
+          smoobu_apartment_id: number;
+          smoobu_apartment_name: string;
+          smoobu_channel_id?: number | null;
+          channel_name?: string | null;
+          booking_type?: string;
+          arrival_date: string;
+          departure_date: string;
+          previous_arrival_date?: string | null;
+          previous_departure_date?: string | null;
+          check_in_time?: string | null;
+          check_out_time?: string | null;
+          guest_name?: string;
+          guest_email?: string | null;
+          guest_phone?: string | null;
+          adults?: number | null;
+          children?: number | null;
+          guest_language?: string | null;
+          guest_id?: number | null;
+          guest_app_url?: string | null;
+          notice?: string | null;
+          is_blocked_booking?: boolean;
+          is_cancelled?: boolean;
+          source_deleted_at?: string | null;
+          booking_price?: number | null;
+          price_paid?: string | null;
+          prepayment?: number | null;
+          prepayment_paid?: string | null;
+          deposit?: number | null;
+          deposit_paid?: string | null;
+          smoobu_created_at?: string | null;
+          smoobu_modified_at?: string | null;
+          sync_status?: string;
+          last_synced_at?: string | null;
+          last_sync_error?: string | null;
+          messages_last_webhook_at?: string | null;
+          messages_need_refresh?: boolean;
+          clean_review_required?: boolean;
+          clean_review_reason?: string | null;
+          raw_payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          property_id?: string;
+          smoobu_reservation_id?: number;
+          smoobu_reference_id?: string | null;
+          smoobu_apartment_id?: number;
+          smoobu_apartment_name?: string;
+          smoobu_channel_id?: number | null;
+          channel_name?: string | null;
+          booking_type?: string;
+          arrival_date?: string;
+          departure_date?: string;
+          previous_arrival_date?: string | null;
+          previous_departure_date?: string | null;
+          check_in_time?: string | null;
+          check_out_time?: string | null;
+          guest_name?: string;
+          guest_email?: string | null;
+          guest_phone?: string | null;
+          adults?: number | null;
+          children?: number | null;
+          guest_language?: string | null;
+          guest_id?: number | null;
+          guest_app_url?: string | null;
+          notice?: string | null;
+          is_blocked_booking?: boolean;
+          is_cancelled?: boolean;
+          source_deleted_at?: string | null;
+          booking_price?: number | null;
+          price_paid?: string | null;
+          prepayment?: number | null;
+          prepayment_paid?: string | null;
+          deposit?: number | null;
+          deposit_paid?: string | null;
+          smoobu_created_at?: string | null;
+          smoobu_modified_at?: string | null;
+          sync_status?: string;
+          last_synced_at?: string | null;
+          last_sync_error?: string | null;
+          messages_last_webhook_at?: string | null;
+          messages_need_refresh?: boolean;
+          clean_review_required?: boolean;
+          clean_review_reason?: string | null;
+          raw_payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "smoobu_bookings_property_id_fkey";
+            columns: ["property_id"];
+            referencedRelation: "properties";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      smoobu_booking_price_elements: {
+        Row: {
+          id: string;
+          booking_id: string;
+          smoobu_price_element_id: number;
+          type: string | null;
+          name: string | null;
+          amount: number | null;
+          quantity: number | null;
+          tax: number | null;
+          currency_code: string | null;
+          sort_order: number | null;
+          price_included_in_id: number | null;
+          raw_payload: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          booking_id: string;
+          smoobu_price_element_id: number;
+          type?: string | null;
+          name?: string | null;
+          amount?: number | null;
+          quantity?: number | null;
+          tax?: number | null;
+          currency_code?: string | null;
+          sort_order?: number | null;
+          price_included_in_id?: number | null;
+          raw_payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          booking_id?: string;
+          smoobu_price_element_id?: number;
+          type?: string | null;
+          name?: string | null;
+          amount?: number | null;
+          quantity?: number | null;
+          tax?: number | null;
+          currency_code?: string | null;
+          sort_order?: number | null;
+          price_included_in_id?: number | null;
+          raw_payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "smoobu_booking_price_elements_booking_id_fkey";
+            columns: ["booking_id"];
+            referencedRelation: "smoobu_bookings";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      smoobu_sync_runs: {
+        Row: {
+          id: string;
+          sync_type: string;
+          status: string;
+          started_at: string;
+          completed_at: string | null;
+          date_from: string | null;
+          date_to: string | null;
+          modified_from: string | null;
+          modified_to: string | null;
+          records_created: number;
+          records_updated: number;
+          records_cancelled: number;
+          records_failed: number;
+          last_successful_sync_at: string | null;
+          error_message: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          sync_type: string;
+          status?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          date_from?: string | null;
+          date_to?: string | null;
+          modified_from?: string | null;
+          modified_to?: string | null;
+          records_created?: number;
+          records_updated?: number;
+          records_cancelled?: number;
+          records_failed?: number;
+          last_successful_sync_at?: string | null;
+          error_message?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          sync_type?: string;
+          status?: string;
+          started_at?: string;
+          completed_at?: string | null;
+          date_from?: string | null;
+          date_to?: string | null;
+          modified_from?: string | null;
+          modified_to?: string | null;
+          records_created?: number;
+          records_updated?: number;
+          records_cancelled?: number;
+          records_failed?: number;
+          last_successful_sync_at?: string | null;
+          error_message?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "smoobu_sync_runs_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      smoobu_webhook_events: {
+        Row: {
+          id: string;
+          action: string;
+          smoobu_user_id: number | null;
+          smoobu_reservation_id: number | null;
+          payload_hash: string;
+          status: string;
+          error_message: string | null;
+          created_at: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          action: string;
+          smoobu_user_id?: number | null;
+          smoobu_reservation_id?: number | null;
+          payload_hash: string;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          action?: string;
+          smoobu_user_id?: number | null;
+          smoobu_reservation_id?: number | null;
+          payload_hash?: string;
+          status?: string;
+          error_message?: string | null;
+          created_at?: string;
+          processed_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -672,6 +1048,19 @@ export type Database = {
           p_scheduled_date: string;
           p_expected_start_time: string | null;
           p_expected_start_time_window_end: string | null;
+          p_guest_arrival_deadline: string | null;
+          p_expected_duration_minutes: number;
+          p_cleaning_type: Database["public"]["Enums"]["cleaning_type"];
+          p_instructions: string;
+          p_notes: string;
+          p_required_configurations: Json;
+        };
+        Returns: string;
+      };
+      create_cleaning_job_from_booking_with_bedroom_snapshots: {
+        Args: {
+          p_booking_id: string;
+          p_expected_start_time: string | null;
           p_guest_arrival_deadline: string | null;
           p_expected_duration_minutes: number;
           p_cleaning_type: Database["public"]["Enums"]["cleaning_type"];

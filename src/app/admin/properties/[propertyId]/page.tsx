@@ -3,14 +3,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BedroomsSection } from "@/components/admin/BedroomsSection";
 import { PropertyDetailsForm } from "@/components/admin/PropertyDetailsForm";
+import { SmoobuPropertyIntegration } from "@/components/admin/SmoobuPropertyIntegration";
 import { requireRole } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
+import { createSmoobuClient, SmoobuConfigurationError, type SmoobuApartment } from "@/lib/smoobu/client";
 
 type PropertyRow = Database["public"]["Tables"]["properties"]["Row"];
 type BedroomRow = Database["public"]["Tables"]["bedrooms"]["Row"] & {
   bedroom_permitted_configurations: Database["public"]["Tables"]["bedroom_permitted_configurations"]["Row"][];
 };
+type SmoobuMappingRow = Pick<
+  Database["public"]["Tables"]["smoobu_property_mappings"]["Row"],
+  "id" | "smoobu_apartment_id" | "smoobu_apartment_name" | "is_active" | "last_verified_at"
+>;
 
 type PropertyDetailPageProps = {
   params: Promise<{
@@ -39,6 +45,24 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
     .eq("property_id", property.id)
     .order("name");
   const bedrooms = (bedroomData ?? []) as BedroomRow[];
+  const { data: mappingData } = await supabase
+    .from("smoobu_property_mappings")
+    .select("id,smoobu_apartment_id,smoobu_apartment_name,is_active,last_verified_at")
+    .eq("property_id", property.id)
+    .eq("provider", "smoobu")
+    .maybeSingle();
+  const mapping = mappingData as SmoobuMappingRow | null;
+  let smoobuApartments: SmoobuApartment[] = [];
+  let smoobuApartmentsError: string | undefined;
+
+  try {
+    smoobuApartments = await createSmoobuClient().getApartments();
+  } catch (error) {
+    smoobuApartmentsError =
+      error instanceof SmoobuConfigurationError
+        ? "Set SMOOBU_API_KEY and SMOOBU_API_SECRET to load apartment options."
+        : "Smoobu apartment options could not be loaded.";
+  }
 
   return (
     <section className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8">
@@ -56,6 +80,13 @@ export default async function PropertyDetailPage({ params, searchParams }: Prope
       ) : null}
 
       <PropertyDetailsForm property={property} />
+
+      <SmoobuPropertyIntegration
+        propertyId={property.id}
+        mapping={mapping}
+        apartments={smoobuApartments}
+        apartmentsError={smoobuApartmentsError}
+      />
 
       <BedroomsSection propertyId={property.id} bedrooms={bedrooms} errorMessage={bedroomError?.message} />
     </section>

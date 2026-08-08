@@ -17,7 +17,9 @@ type PropertyDefaults = Pick<
 const createCleaningJobSchema = z
   .object({
     propertyId: z.string().uuid("Choose a property."),
+    bookingId: z.string().uuid().optional(),
     scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a cleaning date."),
+    expectedStartTime: z.string().optional(),
     guestArrivalDeadline: z.string().optional(),
     cleaningType: cleaningTypeSchema,
     instructions: z.string().trim().optional(),
@@ -48,13 +50,17 @@ function getRequiredConfigurations(formData: FormData) {
 }
 
 export async function createCleaningJob(formData: FormData) {
-  await requireRole(["administrator"]);
+  const bookingId = getFormString(formData, "bookingId");
+  await requireRole(bookingId ? ["administrator", "cleaning_manager"] : ["administrator"]);
 
   const propertyId = getFormString(formData, "propertyId");
   const scheduledDate = getFormString(formData, "scheduledDate");
   const errorPathSearchParams = new URLSearchParams({ addClean: "1" });
   if (propertyId) {
     errorPathSearchParams.set("propertyId", propertyId);
+  }
+  if (bookingId) {
+    errorPathSearchParams.set("bookingId", bookingId);
   }
   if (scheduledDate) {
     errorPathSearchParams.set("scheduledDate", scheduledDate);
@@ -65,7 +71,9 @@ export async function createCleaningJob(formData: FormData) {
   const errorPath = `/admin/jobs?${errorPathSearchParams.toString()}`;
   const parsed = createCleaningJobSchema.safeParse({
     propertyId,
+    bookingId: bookingId || undefined,
     scheduledDate,
+    expectedStartTime: getFormString(formData, "expectedStartTime") || undefined,
     guestArrivalDeadline: getFormString(formData, "guestArrivalDeadline") || undefined,
     cleaningType: getFormString(formData, "cleaningType"),
     instructions: getFormString(formData, "instructions"),
@@ -108,7 +116,21 @@ export async function createCleaningJob(formData: FormData) {
     p_notes: parsed.data.notes || "",
     p_required_configurations: parsed.data.requiredConfigurations as Json
   } satisfies CreateCleaningJobArgs;
-  const { data, error } = await supabase.rpc("create_cleaning_job_with_bedroom_snapshots", args as never);
+  const bookingArgs = {
+    p_booking_id: parsed.data.bookingId ?? "",
+    p_expected_start_time: parsed.data.expectedStartTime || null,
+    p_guest_arrival_deadline: parsed.data.guestArrivalDeadline
+      ? new Date(parsed.data.guestArrivalDeadline).toISOString()
+      : getDefaultGuestArrivalDeadlineIso(parsed.data.scheduledDate),
+    p_expected_duration_minutes: propertyDefaults.default_cleaning_duration_minutes,
+    p_cleaning_type: parsed.data.cleaningType,
+    p_instructions: parsed.data.instructions || "",
+    p_notes: parsed.data.notes || "",
+    p_required_configurations: parsed.data.requiredConfigurations as Json
+  };
+  const { data, error } = parsed.data.bookingId
+    ? await supabase.rpc("create_cleaning_job_from_booking_with_bedroom_snapshots", bookingArgs as never)
+    : await supabase.rpc("create_cleaning_job_with_bedroom_snapshots", args as never);
   const jobId = data as string | null;
 
   if (error || !jobId) {
