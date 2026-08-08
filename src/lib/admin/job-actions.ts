@@ -37,6 +37,15 @@ function redirectWithError(path: string, message: string): never {
   redirect(`${path}${separator}error=${encodeURIComponent(message)}`);
 }
 
+function isMissingRpcSignatureError(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      (error.code === "PGRST202" ||
+        error.message?.includes("schema cache") ||
+        error.message?.includes("Could not find the function"))
+  );
+}
+
 function getRequiredConfigurations(formData: FormData) {
   const requiredConfigurations: Record<string, string> = {};
 
@@ -128,13 +137,30 @@ export async function createCleaningJob(formData: FormData) {
     p_notes: parsed.data.notes || "",
     p_required_configurations: parsed.data.requiredConfigurations as Json
   };
-  const { data, error } = parsed.data.bookingId
+  const legacyManualArgs = {
+    p_property_id: parsed.data.propertyId,
+    p_scheduled_date: parsed.data.scheduledDate,
+    p_guest_arrival_deadline: parsed.data.guestArrivalDeadline
+      ? new Date(parsed.data.guestArrivalDeadline).toISOString()
+      : getDefaultGuestArrivalDeadlineIso(parsed.data.scheduledDate),
+    p_expected_duration_minutes: propertyDefaults.default_cleaning_duration_minutes,
+    p_cleaning_type: parsed.data.cleaningType,
+    p_instructions: parsed.data.instructions || "",
+    p_notes: parsed.data.notes || "",
+    p_required_configurations: parsed.data.requiredConfigurations as Json
+  };
+  let createResult = parsed.data.bookingId
     ? await supabase.rpc("create_cleaning_job_from_booking_with_bedroom_snapshots", bookingArgs as never)
     : await supabase.rpc("create_cleaning_job_with_bedroom_snapshots", args as never);
-  const jobId = data as string | null;
 
-  if (error || !jobId) {
-    redirectWithError(errorPath, error?.message ?? "Cleaning job could not be created.");
+  if (!parsed.data.bookingId && isMissingRpcSignatureError(createResult.error)) {
+    createResult = await supabase.rpc("create_cleaning_job_with_bedroom_snapshots", legacyManualArgs as never);
+  }
+
+  const jobId = createResult.data as string | null;
+
+  if (createResult.error || !jobId) {
+    redirectWithError(errorPath, createResult.error?.message ?? "Cleaning job could not be created.");
   }
 
   revalidatePath("/admin/jobs");

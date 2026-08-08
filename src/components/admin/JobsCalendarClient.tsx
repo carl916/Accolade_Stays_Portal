@@ -242,10 +242,8 @@ function getBedSetupSummary(property: PropertyOption | null) {
     .join(" - ");
 }
 
-function getGuestShortName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-
-  return parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? "Guest";
+function getGuestDisplayName(name: string) {
+  return name.trim() || "Guest";
 }
 
 function getFirstName(name: string) {
@@ -293,7 +291,9 @@ function formatDateTime(value: string | null) {
     month: "short",
     year: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Europe/London",
+    timeZoneName: "short"
   }).format(new Date(value));
 }
 
@@ -615,7 +615,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
   function renderBookingBoundary(booking: BookingCalendarItem, type: "arrival" | "departure") {
     const isDeparture = type === "departure";
     const Icon = isDeparture ? LogOut : LogIn;
-    const label = `${isDeparture ? "Depart" : "Arrive"} ${getGuestShortName(booking.guestName)}`;
+    const label = `${isDeparture ? "Depart" : "Arrive"} ${getGuestDisplayName(booking.guestName)}`;
     const time = isDeparture ? booking.checkOutTime : booking.checkInTime;
 
     return (
@@ -869,7 +869,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                                     <ChevronLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                   ) : null}
                                   <span className="truncate">
-                                    {getGuestShortName(booking.guestName)} - {booking.propertyName}
+                                    {getGuestDisplayName(booking.guestName)} - {booking.propertyName}
                                   </span>
                                   {booking.channelName ? (
                                     <span className="ml-auto hidden shrink-0 rounded-sm bg-white/60 px-1 text-[0.65rem] font-semibold xl:inline-flex">

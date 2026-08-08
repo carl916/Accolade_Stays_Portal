@@ -118,6 +118,18 @@ function getRecoveredError(params: Awaited<AdminJobsPageProps["searchParams"]>) 
   return embeddedError ? decodeURIComponent(embeddedError.replace(/\+/g, " ")) : undefined;
 }
 
+function formatUkDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/London",
+    timeZoneName: "short"
+  }).format(new Date(value));
+}
+
 export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps) {
   const profile = await requireRole(["administrator", "cleaning_manager"]);
   const canManageSmoobu = canManageSettings(profile.role);
@@ -220,13 +232,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
             <p className="text-sm font-semibold text-brand-ink">Smoobu</p>
             <p className="mt-1 text-sm text-stone-600">
               {latestSyncRun?.last_successful_sync_at
-                ? `Last synced: ${new Intl.DateTimeFormat("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  }).format(new Date(latestSyncRun.last_successful_sync_at))}`
+                ? `Last synced: ${formatUkDateTime(latestSyncRun.last_successful_sync_at)}`
                 : "No successful sync yet"}
               {" - "}
               {mappings.filter((mapping) => mapping.is_active).length} properties mapped
