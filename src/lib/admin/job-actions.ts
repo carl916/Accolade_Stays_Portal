@@ -164,5 +164,6 @@ export async function createCleaningJob(formData: FormData) {
   }
 
   revalidatePath("/admin/jobs");
-  redirect(`/admin/jobs/${jobId}`);
+  revalidatePath(`/admin/jobs/${jobId}`);
+  redirect("/admin/jobs");
 }

@@ -181,6 +181,8 @@ const propertyTonePalette = [
   { accent: "#6a5f8f", background: "#f1eff7", text: "#2f2940" },
   { accent: "#2f6f73", background: "#eaf5f5", text: "#1d3638" }
 ];
+const calendarDateGridTemplate = "7rem repeat(7, minmax(0, 1fr))";
+const calendarHalfDayGridTemplate = "7rem repeat(14, minmax(0, 1fr))";
 
 function toDateInputValue(date: Date) {
   return toCalendarDateValue(date);
@@ -266,6 +268,20 @@ function formatDateHeading(value: string) {
     day: "numeric",
     month: "long"
   }).format(parseCalendarDate(value));
+}
+
+function formatAgendaGroupHeading(value: string, todayValue: string) {
+  const tomorrowValue = toDateInputValue(addCalendarDays(parseCalendarDate(todayValue), 1));
+
+  if (value === todayValue) {
+    return "Today";
+  }
+
+  if (value === tomorrowValue) {
+    return "Tomorrow";
+  }
+
+  return formatDateHeading(value);
 }
 
 function formatDateTimeClock(value: string | null) {
@@ -623,14 +639,27 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     );
   }
 
-  function getPropertyLaneLabel(property: PropertyOption) {
-    const words = property.name.split(/\s+/).filter(Boolean);
-
-    if (words.length > 1) {
-      return words.map((word) => word[0]).join("").slice(0, 3).toUpperCase();
-    }
-
-    return property.name.slice(0, 3).toUpperCase();
+  function renderAgendaJobCard(job: CleaningJobCalendarItem) {
+    return (
+      <Link
+        key={job.id}
+        href={`/admin/jobs/${job.id}`}
+        className={`grid gap-2 rounded-md border p-3 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${getCleaningChipClasses(
+          job
+        )}`}
+      >
+        <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+          {getCleaningChipIcon(job)}
+          <span className="truncate">{job.propertyName}</span>
+        </span>
+        <span className="text-xs font-medium opacity-90">
+          {cleaningTypeLabels[job.cleaningType]} - {formatTime(job.expectedStartTime, "Time not set")}
+        </span>
+        <span className="text-xs opacity-80">
+          {job.assignedCleanerName ?? "Unassigned"} - {statusLabels[job.status]}
+        </span>
+      </Link>
+    );
   }
 
   function getBookingTooltip(booking: BookingCalendarItem) {
@@ -677,7 +706,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
             </button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[auto_minmax(14rem,1fr)_auto] sm:items-end">
+          <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-end">
             <div className="grid gap-1.5 text-sm font-medium text-brand-ink">
               View
               <div className="inline-grid min-h-11 grid-cols-2 overflow-hidden rounded-md border border-brand-border bg-white">
@@ -698,12 +727,29 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                 ))}
               </div>
             </div>
-            <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+            <div className="grid gap-1.5 text-sm font-medium text-brand-ink">
               Property
+              <div className="hidden min-h-11 flex-wrap items-center gap-1 rounded-md border border-brand-border bg-white p-1 md:flex">
+                {[{ id: allPropertiesValue, name: "All" }, ...properties].map((property) => (
+                  <button
+                    key={property.id}
+                    type="button"
+                    onClick={() => setPropertyFilter(property.id)}
+                    aria-pressed={propertyFilter === property.id}
+                    className={`min-h-9 rounded px-3 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+                      propertyFilter === property.id
+                        ? "bg-brand-primary text-brand-primaryForeground"
+                        : "text-stone-700 hover:bg-brand-muted"
+                    }`}
+                  >
+                    <span className="block max-w-32 truncate">{property.name}</span>
+                  </button>
+                ))}
+              </div>
               <select
                 value={propertyFilter}
                 onChange={(event) => setPropertyFilter(event.target.value)}
-                className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+                className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30 md:hidden"
               >
                 <option value={allPropertiesValue}>All properties</option>
                 {properties.map((property) => (
@@ -712,7 +758,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             <button
               type="button"
               onClick={() => openAddClean()}
@@ -733,22 +779,37 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
         {calendarView === "month" ? (
           <>
             <div className="hidden overflow-hidden rounded-lg border border-brand-border bg-white sm:block">
-              <div className="grid grid-cols-7 border-b border-brand-border bg-brand-muted">
+              <div
+                className="grid border-b border-brand-border bg-brand-muted"
+                style={{ gridTemplateColumns: calendarDateGridTemplate }}
+              >
+                <div className="border-r border-brand-border px-3 py-2 text-xs font-semibold uppercase text-brand-darkSlate">
+                  Property
+                </div>
                 {weekdayLabels.map((weekday) => (
                   <div key={weekday} className="px-3 py-2 text-xs font-semibold uppercase text-brand-darkSlate">
                     {weekday}
                   </div>
                 ))}
               </div>
-              <div className="divide-y divide-brand-border">
-                {calendarWeeks.map((week) => {
+              <div className="grid gap-2 bg-brand-muted/70">
+                {calendarWeeks.map((week, weekIndex) => {
                   const weekStartValue = toDateInputValue(week[0]);
                   const stayWeek = stayWeeksByStart.get(weekStartValue);
                   const weekHasJobs = week.some((day) => (jobsByDate.get(toDateInputValue(day)) ?? []).length > 0);
 
                   return (
-                    <div key={weekStartValue} className="relative bg-white">
-                      <div className="pointer-events-none absolute inset-0 grid grid-cols-7 divide-x divide-brand-border">
+                    <div
+                      key={weekStartValue}
+                      className={`relative overflow-hidden bg-white ${
+                        weekIndex > 0 ? "border-t-2 border-brand-slate/30" : ""
+                      }`}
+                    >
+                      <div
+                        className="pointer-events-none absolute inset-0 grid divide-x divide-brand-border"
+                        style={{ gridTemplateColumns: calendarDateGridTemplate }}
+                      >
+                        <div className="bg-brand-muted/40" />
                         {week.map((day) => {
                           const dateValue = toDateInputValue(day);
                           const isCurrentMonth = isSameMonth(day, calendarMonth);
@@ -764,7 +825,13 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                         })}
                       </div>
 
-                      <div className="relative grid grid-cols-7">
+                      <div
+                        className="relative grid border-b border-brand-border/70"
+                        style={{ gridTemplateColumns: calendarDateGridTemplate }}
+                      >
+                        <div className="border-r border-brand-border bg-white/80 px-3 py-1 text-[0.65rem] font-semibold uppercase text-stone-500">
+                          Week
+                        </div>
                         {week.map((day) => {
                           const dateValue = toDateInputValue(day);
                           const isCurrentMonth = isSameMonth(day, calendarMonth);
@@ -791,7 +858,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                         })}
                       </div>
 
-                      <div className="relative border-t border-brand-border/70 py-1.5">
+                      <div className="relative py-1.5">
                         {visibleLaneProperties.length > 0 ? (
                           visibleLaneProperties.map((property) => {
                             const tone = propertyTonesById.get(property.id) ?? propertyTonePalette[0];
@@ -802,14 +869,19 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                             return (
                               <div
                                 key={property.id}
-                                className="relative grid min-h-8 items-center px-1 [grid-template-columns:repeat(14,minmax(0,1fr))]"
+                                className="relative grid min-h-9 items-center"
+                                style={{ gridTemplateColumns: calendarHalfDayGridTemplate }}
                               >
-                                <span
-                                  title={property.name}
-                                  className="pointer-events-none absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-sm bg-white/80 px-1 text-[0.6rem] font-semibold uppercase text-stone-500 shadow-sm"
-                                >
-                                  {getPropertyLaneLabel(property)}
-                                </span>
+                                <div className="relative z-10 flex min-h-9 min-w-0 items-center gap-2 border-r border-brand-border bg-white/90 px-3">
+                                  <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: tone.accent }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="truncate text-xs font-semibold text-stone-600" title={property.name}>
+                                    {property.name}
+                                  </span>
+                                </div>
                                 {propertySegments.map((segment) => {
                                   const booking = bookingsById.get(segment.bookingId);
 
@@ -827,7 +899,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                                         segment.startsAtBookingStart ? "rounded-l-md border-l-4" : "rounded-l-none border-l"
                                       } ${segment.endsAtBookingEnd ? "rounded-r-md" : "rounded-r-none"}`}
                                       style={{
-                                        gridColumn: `${segment.startHalfColumn} / ${segment.endHalfColumn}`,
+                                        gridColumn: `${segment.startHalfColumn + 1} / ${segment.endHalfColumn + 1}`,
                                         backgroundColor: tone.background,
                                         borderColor: tone.accent,
                                         color: tone.text
@@ -841,12 +913,25 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                             );
                           })
                         ) : (
-                          <div className="min-h-8" />
+                          <div
+                            className="relative grid min-h-9 items-center"
+                            style={{ gridTemplateColumns: calendarHalfDayGridTemplate }}
+                          >
+                            <div className="border-r border-brand-border bg-white/90 px-3 py-2 text-xs font-semibold text-stone-500">
+                              No properties
+                            </div>
+                          </div>
                         )}
                       </div>
 
                       {weekHasJobs ? (
-                        <div className="relative grid border-t border-brand-border/70 [grid-template-columns:repeat(14,minmax(0,1fr))]">
+                        <div
+                          className="relative grid border-t border-brand-border/70 bg-white/90"
+                          style={{ gridTemplateColumns: calendarHalfDayGridTemplate }}
+                        >
+                          <div className="border-r border-brand-border px-3 py-2 text-[0.65rem] font-semibold uppercase text-stone-500">
+                            Cleans
+                          </div>
                           {week.map((day, index) => {
                             const dateValue = toDateInputValue(day);
                             const dayJobs = jobsByDate.get(dateValue) ?? [];
@@ -855,7 +940,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                               <div
                                 key={dateValue}
                                 className="grid min-h-12 gap-1 p-1.5"
-                                style={{ gridColumn: `${index * 2 + 1} / span 2` }}
+                                style={{ gridColumn: `${index * 2 + 2} / span 2` }}
                               >
                                 {dayJobs.map((job) => renderCleaningChip(job))}
                               </div>
@@ -928,54 +1013,33 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
           </>
         ) : (
           <div className="grid gap-4">
-            <section className="border-b border-brand-border pb-4">
-              <h3 className="text-sm font-semibold text-brand-ink">Today, {formatDateHeading(todayValue)}</h3>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                {(propertyFilter === allPropertiesValue
-                  ? properties
-                  : properties.filter((property) => property.id === propertyFilter)
-                ).map((property) => {
-                  const todayJobs = (jobsByDate.get(todayValue) ?? []).filter((job) => job.propertyId === property.id);
-                  const isOccupied = (occupancyByDate.get(todayValue) ?? []).some(
-                    (booking) => booking.propertyId === property.id
-                  );
-
-                  return (
-                    <div key={property.id} className="grid gap-1 border-l-4 border-brand-border bg-brand-muted px-3 py-2">
-                      <p className="truncate text-sm font-semibold text-brand-ink">{property.name}</p>
-                      <p className="text-sm text-stone-600">
-                        {todayJobs.length > 0
-                          ? `${todayJobs.length} clean${todayJobs.length === 1 ? "" : "s"} today`
-                          : isOccupied
-                            ? "Occupied"
-                            : "No clean scheduled"}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
             {agendaDateGroups.length > 0 ? (
-              <div className="grid gap-4">
-                {agendaDateGroups.map(([dateValue, dateJobs]) => (
-                  <section key={dateValue} className="grid gap-2 border-b border-brand-border pb-4 last:border-b-0 last:pb-0">
+              agendaDateGroups.map(([dateValue, dateJobs]) => {
+                const heading = formatAgendaGroupHeading(dateValue, todayValue);
+
+                return (
+                  <section
+                    key={dateValue}
+                    className="grid gap-2 border-b border-brand-border pb-4 last:border-b-0 last:pb-0"
+                  >
                     <div>
-                      <h3 className="text-sm font-semibold text-brand-ink">{formatDateHeading(dateValue)}</h3>
+                      <h3 className="text-sm font-semibold text-brand-ink">{heading}</h3>
                       <p className="text-xs text-stone-500">
+                        {heading === formatDateHeading(dateValue) ? "" : `${formatDateHeading(dateValue)} - `}
                         {dateJobs.length} clean{dateJobs.length === 1 ? "" : "s"}
                       </p>
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {dateJobs.map((job) => renderCleaningChip(job, "regular"))}
+                      {dateJobs.map((job) => renderAgendaJobCard(job))}
                     </div>
                   </section>
-                ))}
-              </div>
+                );
+              })
             ) : (
-              <p className="rounded-md bg-brand-muted px-3 py-3 text-sm text-stone-600">
-                No upcoming cleaning jobs match the current property filter.
-              </p>
+              <div className="rounded-md border border-brand-border bg-brand-muted px-3 py-3">
+                <p className="text-sm font-semibold text-brand-ink">No upcoming cleaning jobs</p>
+                <p className="mt-1 text-sm text-stone-600">The current property filter has no scheduled cleans ahead.</p>
+              </div>
             )}
           </div>
         )}
