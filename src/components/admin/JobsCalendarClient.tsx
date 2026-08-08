@@ -532,17 +532,23 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
   const todayValue = toDateInputValue(new Date());
 
   const agendaDateGroups = useMemo(() => {
-    const upcomingJobs = filteredJobs
-      .filter((job) => job.status !== "cancelled" && job.scheduledDate >= todayValue)
+    const monthStartValue = toDateInputValue(startOfMonth(calendarMonth));
+    const monthEndValue = toDateInputValue(endOfMonth(calendarMonth));
+    const monthJobs = filteredJobs
+      .filter(
+        (job) =>
+          job.status !== "cancelled" &&
+          job.scheduledDate >= monthStartValue &&
+          job.scheduledDate <= monthEndValue
+      )
       .sort((left, right) =>
         `${left.scheduledDate} ${formatTime(left.expectedStartTime, "99:99")} ${left.propertyName}`.localeCompare(
           `${right.scheduledDate} ${formatTime(right.expectedStartTime, "99:99")} ${right.propertyName}`
         )
-      )
-      .slice(0, 30);
+      );
 
-    return [...groupByDate(upcomingJobs, (job) => job.scheduledDate).entries()];
-  }, [filteredJobs, todayValue]);
+    return [...groupByDate(monthJobs, (job) => job.scheduledDate).entries()];
+  }, [calendarMonth, filteredJobs]);
 
   function getNextArrivalForBooking(booking: BookingCalendarItem) {
     return bookings
@@ -1037,8 +1043,10 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
               })
             ) : (
               <div className="rounded-md border border-brand-border bg-brand-muted px-3 py-3">
-                <p className="text-sm font-semibold text-brand-ink">No upcoming cleaning jobs</p>
-                <p className="mt-1 text-sm text-stone-600">The current property filter has no scheduled cleans ahead.</p>
+                <p className="text-sm font-semibold text-brand-ink">No cleaning jobs in {format(calendarMonth, "MMMM yyyy")}</p>
+                <p className="mt-1 text-sm text-stone-600">
+                  The current property filter has no scheduled cleans in this month.
+                </p>
               </div>
             )}
           </div>
