@@ -20,8 +20,6 @@ import {
   ChevronRight,
   Clock,
   ListChecks,
-  LogIn,
-  LogOut,
   Mail,
   Plus,
   Settings2
@@ -369,10 +367,6 @@ function getCleaningChipIcon(job: CleaningJobCalendarItem) {
   return <ListChecks className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
 }
 
-function sortBookingsByPropertyAndGuest(left: BookingCalendarItem, right: BookingCalendarItem) {
-  return `${left.propertyName} ${left.guestName}`.localeCompare(`${right.propertyName} ${right.guestName}`);
-}
-
 export function JobsCalendarClient({ properties, jobs, bookings, initialError, initialModal }: JobsCalendarClientProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
@@ -449,6 +443,14 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     return bookings.filter((booking) => booking.propertyId === propertyFilter);
   }, [bookings, propertyFilter]);
 
+  const visibleLaneProperties = useMemo(() => {
+    if (propertyFilter === allPropertiesValue) {
+      return properties;
+    }
+
+    return properties.filter((property) => property.id === propertyFilter);
+  }, [properties, propertyFilter]);
+
   const bookingsById = useMemo(() => new Map(bookings.map((booking) => [booking.id, booking])), [bookings]);
 
   const propertyTonesById = useMemo(
@@ -473,18 +475,6 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
         (job) => job.scheduledDate
       ),
     [filteredJobs]
-  );
-
-  const arrivalsByDate = useMemo(
-    () =>
-      groupByDate([...filteredBookings].sort(sortBookingsByPropertyAndGuest), (booking) => booking.arrivalDate),
-    [filteredBookings]
-  );
-
-  const departuresByDate = useMemo(
-    () =>
-      groupByDate([...filteredBookings].sort(sortBookingsByPropertyAndGuest), (booking) => booking.departureDate),
-    [filteredBookings]
   );
 
   const occupancyByDate = useMemo(() => {
@@ -612,33 +602,6 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
 
   const selectedPropertyHasBedrooms = (selectedProperty?.bedrooms.length ?? 0) > 0;
 
-  function renderBookingBoundary(booking: BookingCalendarItem, type: "arrival" | "departure") {
-    const isDeparture = type === "departure";
-    const Icon = isDeparture ? LogOut : LogIn;
-    const label = `${isDeparture ? "Depart" : "Arrive"} ${getGuestDisplayName(booking.guestName)}`;
-    const time = isDeparture ? booking.checkOutTime : booking.checkInTime;
-
-    return (
-      <button
-        key={`${type}-${booking.id}`}
-        type="button"
-        onClick={() => openBooking(booking)}
-        title={`${label} - ${booking.propertyName}${time ? ` at ${formatTime(time)}` : ""}`}
-        className="flex min-h-7 min-w-0 items-center gap-1 rounded-sm border border-transparent px-1.5 text-left text-xs text-stone-700 transition hover:border-brand-border hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1"
-      >
-        <Icon className="h-3.5 w-3.5 shrink-0 text-brand-darkSlate" aria-hidden="true" />
-        <span className="truncate">
-          {label} - {booking.propertyName}
-        </span>
-        {isDeparture && booking.linkedJobs.length === 0 ? (
-          <span className="ml-auto shrink-0 rounded-sm bg-amber-50 px-1 text-[0.65rem] font-semibold text-amber-800">
-            No clean
-          </span>
-        ) : null}
-      </button>
-    );
-  }
-
   function renderCleaningChip(job: CleaningJobCalendarItem, size: "compact" | "regular" = "compact") {
     return (
       <Link
@@ -660,18 +623,24 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     );
   }
 
-  function getOccupiedPropertySummary(bookingsForDate: BookingCalendarItem[]) {
-    const names = [...new Set(bookingsForDate.map((booking) => booking.propertyName))];
+  function getPropertyLaneLabel(property: PropertyOption) {
+    const words = property.name.split(/\s+/).filter(Boolean);
 
-    if (names.length === 0) {
-      return "No stays";
+    if (words.length > 1) {
+      return words.map((word) => word[0]).join("").slice(0, 3).toUpperCase();
     }
 
-    if (names.length <= 2) {
-      return `Occupied: ${names.join(", ")}`;
-    }
+    return property.name.slice(0, 3).toUpperCase();
+  }
 
-    return `Occupied: ${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  function getBookingTooltip(booking: BookingCalendarItem) {
+    return [
+      getGuestDisplayName(booking.guestName),
+      booking.propertyName,
+      `Check-in: ${formatDate(booking.arrivalDate)}${booking.checkInTime ? ` ${formatTime(booking.checkInTime)}` : ""}`,
+      `Check-out: ${formatDate(booking.departureDate)}${booking.checkOutTime ? ` ${formatTime(booking.checkOutTime)}` : ""}`,
+      `Channel: ${booking.channelName ?? "Unknown"}`
+    ].join("\n");
   }
 
   return (
@@ -775,114 +744,123 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                 {calendarWeeks.map((week) => {
                   const weekStartValue = toDateInputValue(week[0]);
                   const stayWeek = stayWeeksByStart.get(weekStartValue);
-                  const laneCount = stayWeek?.laneCount ?? 0;
+                  const weekHasJobs = week.some((day) => (jobsByDate.get(toDateInputValue(day)) ?? []).length > 0);
 
                   return (
-                    <div key={weekStartValue} className="bg-white">
-                      <div className="grid grid-cols-7 divide-x divide-brand-border">
+                    <div key={weekStartValue} className="relative bg-white">
+                      <div className="pointer-events-none absolute inset-0 grid grid-cols-7 divide-x divide-brand-border">
                         {week.map((day) => {
                           const dateValue = toDateInputValue(day);
-                          const dayJobs = jobsByDate.get(dateValue) ?? [];
-                          const arrivals = arrivalsByDate.get(dateValue) ?? [];
-                          const departures = departuresByDate.get(dateValue) ?? [];
-                          const occupied = occupancyByDate.get(dateValue) ?? [];
                           const isCurrentMonth = isSameMonth(day, calendarMonth);
-                          const hasOperationalItems = dayJobs.length > 0 || arrivals.length > 0 || departures.length > 0;
 
                           return (
                             <div
                               key={dateValue}
-                              className={`min-h-28 bg-white p-2 ${isCurrentMonth ? "" : "bg-brand-muted/40 text-stone-400"} ${
-                                dateValue === todayValue ? "ring-1 ring-inset ring-brand-focus" : ""
+                              className={`${isCurrentMonth ? "bg-white/80" : "bg-brand-muted/50"} ${
+                                dateValue === todayValue ? "bg-brand-light/30" : ""
                               }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => openAddClean(dateValue)}
-                                  className={`inline-flex min-h-7 min-w-7 items-center justify-center rounded-md text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
-                                    dateValue === todayValue
-                                      ? "bg-brand-primary text-brand-primaryForeground"
-                                      : "hover:bg-brand-muted"
-                                  }`}
-                                  aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
-                                >
-                                  {format(day, "d")}
-                                </button>
-                                {hasOperationalItems ? (
-                                  <span className="text-[0.68rem] font-semibold text-brand-darkSlate">
-                                    {dayJobs.length > 0 ? `${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}` : ""}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              <div className="mt-2 grid gap-1.5">
-                                {departures.map((booking) => renderBookingBoundary(booking, "departure"))}
-                                {dayJobs.map((job) => renderCleaningChip(job))}
-                                {arrivals.map((booking) => renderBookingBoundary(booking, "arrival"))}
-                                {!hasOperationalItems && occupied.length > 0 ? (
-                                  <p className="truncate rounded-sm bg-brand-muted px-1.5 py-1 text-xs text-stone-600">
-                                    {getOccupiedPropertySummary(occupied)}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
+                            />
                           );
                         })}
                       </div>
 
-                      {laneCount > 0 ? (
-                        <div className="border-t border-brand-border bg-white px-1.5 py-2">
-                          <div
-                            className="grid grid-cols-7 gap-y-1"
-                            style={{ gridTemplateRows: `repeat(${laneCount}, minmax(1.75rem, auto))` }}
-                          >
-                            {stayWeek?.segments.map((segment) => {
-                              const booking = bookingsById.get(segment.bookingId);
+                      <div className="relative grid grid-cols-7">
+                        {week.map((day) => {
+                          const dateValue = toDateInputValue(day);
+                          const isCurrentMonth = isSameMonth(day, calendarMonth);
 
-                              if (!booking) {
-                                return null;
-                              }
+                          return (
+                            <button
+                              key={dateValue}
+                              type="button"
+                              onClick={() => openAddClean(dateValue)}
+                              className={`min-h-9 px-2 py-1 text-left text-sm font-semibold transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-inset ${
+                                isCurrentMonth ? "text-brand-ink" : "text-stone-400"
+                              }`}
+                              aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
+                            >
+                              <span
+                                className={`inline-flex min-h-7 min-w-7 items-center justify-center rounded-md ${
+                                  dateValue === todayValue ? "bg-brand-primary text-brand-primaryForeground" : ""
+                                }`}
+                              >
+                                {format(day, "d")}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                              const tone = propertyTonesById.get(booking.propertyId) ?? propertyTonePalette[0];
+                      <div className="relative border-t border-brand-border/70 py-1.5">
+                        {visibleLaneProperties.length > 0 ? (
+                          visibleLaneProperties.map((property) => {
+                            const tone = propertyTonesById.get(property.id) ?? propertyTonePalette[0];
+                            const propertySegments = (stayWeek?.segments ?? []).filter(
+                              (segment) => segment.propertyId === property.id
+                            );
 
-                              return (
-                                <button
-                                  key={`${segment.bookingId}-${segment.weekStart}-${segment.startColumn}`}
-                                  type="button"
-                                  onClick={() => openBooking(booking)}
-                                  title={`${booking.guestName || "Guest"} - ${booking.propertyName}${
-                                    booking.channelName ? ` - ${booking.channelName}` : ""
-                                  }`}
-                                  className={`mx-0.5 flex min-h-7 min-w-0 items-center gap-1 border px-2 text-left text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
-                                    segment.startsAtBookingStart ? "rounded-l-md border-l-4" : "rounded-l-none border-l"
-                                  } ${segment.endsAtBookingEnd ? "rounded-r-md" : "rounded-r-none"}`}
-                                  style={{
-                                    gridColumn: `${segment.startColumn} / ${segment.endColumn}`,
-                                    gridRow: segment.lane + 1,
-                                    backgroundColor: tone.background,
-                                    borderColor: tone.accent,
-                                    color: tone.text
-                                  }}
+                            return (
+                              <div
+                                key={property.id}
+                                className="relative grid min-h-8 items-center px-1 [grid-template-columns:repeat(14,minmax(0,1fr))]"
+                              >
+                                <span
+                                  title={property.name}
+                                  className="pointer-events-none absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-sm bg-white/80 px-1 text-[0.6rem] font-semibold uppercase text-stone-500 shadow-sm"
                                 >
-                                  {segment.continuesBefore ? (
-                                    <ChevronLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                  ) : null}
-                                  <span className="truncate">
-                                    {getGuestDisplayName(booking.guestName)} - {booking.propertyName}
-                                  </span>
-                                  {booking.channelName ? (
-                                    <span className="ml-auto hidden shrink-0 rounded-sm bg-white/60 px-1 text-[0.65rem] font-semibold xl:inline-flex">
-                                      {booking.channelName}
-                                    </span>
-                                  ) : null}
-                                  {segment.continuesAfter ? (
-                                    <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
+                                  {getPropertyLaneLabel(property)}
+                                </span>
+                                {propertySegments.map((segment) => {
+                                  const booking = bookingsById.get(segment.bookingId);
+
+                                  if (!booking) {
+                                    return null;
+                                  }
+
+                                  return (
+                                    <button
+                                      key={`${segment.bookingId}-${segment.weekStart}-${segment.startHalfColumn}`}
+                                      type="button"
+                                      onClick={() => openBooking(booking)}
+                                      title={getBookingTooltip(booking)}
+                                      className={`z-10 my-0.5 flex min-h-7 min-w-0 items-center border px-2 text-left text-xs font-semibold shadow-sm transition hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
+                                        segment.startsAtBookingStart ? "rounded-l-md border-l-4" : "rounded-l-none border-l"
+                                      } ${segment.endsAtBookingEnd ? "rounded-r-md" : "rounded-r-none"}`}
+                                      style={{
+                                        gridColumn: `${segment.startHalfColumn} / ${segment.endHalfColumn}`,
+                                        backgroundColor: tone.background,
+                                        borderColor: tone.accent,
+                                        color: tone.text
+                                      }}
+                                    >
+                                      <span className="truncate">{getGuestDisplayName(booking.guestName)}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="min-h-8" />
+                        )}
+                      </div>
+
+                      {weekHasJobs ? (
+                        <div className="relative grid border-t border-brand-border/70 [grid-template-columns:repeat(14,minmax(0,1fr))]">
+                          {week.map((day, index) => {
+                            const dateValue = toDateInputValue(day);
+                            const dayJobs = jobsByDate.get(dateValue) ?? [];
+
+                            return (
+                              <div
+                                key={dateValue}
+                                className="grid min-h-12 gap-1 p-1.5"
+                                style={{ gridColumn: `${index * 2 + 1} / span 2` }}
+                              >
+                                {dayJobs.map((job) => renderCleaningChip(job))}
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
@@ -897,11 +875,9 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                 .map((day) => {
                   const dateValue = toDateInputValue(day);
                   const dayJobs = jobsByDate.get(dateValue) ?? [];
-                  const arrivals = arrivalsByDate.get(dateValue) ?? [];
-                  const departures = departuresByDate.get(dateValue) ?? [];
-                  const occupied = occupancyByDate.get(dateValue) ?? [];
-                  const hasVisibleItems =
-                    dayJobs.length > 0 || arrivals.length > 0 || departures.length > 0 || occupied.length > 0;
+                  const dayBookings = (occupancyByDate.get(dateValue) ?? []).filter(
+                    (booking) => booking.arrivalDate === dateValue || booking.departureDate === dateValue
+                  );
 
                   return (
                     <div key={dateValue} className="rounded-lg border border-brand-border bg-white p-3">
@@ -912,24 +888,37 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                       >
                         <span className="block text-sm font-semibold text-brand-ink">{format(day, "EEE d MMM")}</span>
                         <span className="block text-xs text-stone-500">
-                          {!hasVisibleItems
-                            ? "No cleans or stays"
-                            : `${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}, ${departures.length} departure${
-                                departures.length === 1 ? "" : "s"
-                              }, ${arrivals.length} arrival${arrivals.length === 1 ? "" : "s"}`}
+                          {dayJobs.length === 0 && dayBookings.length === 0
+                            ? "No cleans or changeovers"
+                            : `${dayJobs.length} clean${dayJobs.length === 1 ? "" : "s"}, ${dayBookings.length} changeover${
+                                dayBookings.length === 1 ? "" : "s"
+                              }`}
                         </span>
                       </button>
 
-                      {hasVisibleItems ? (
+                      {dayJobs.length > 0 || dayBookings.length > 0 ? (
                         <div className="mt-3 grid gap-2">
-                          {departures.map((booking) => renderBookingBoundary(booking, "departure"))}
+                          {dayBookings.map((booking) => {
+                            const tone = propertyTonesById.get(booking.propertyId) ?? propertyTonePalette[0];
+
+                            return (
+                              <button
+                                key={`${booking.id}-${dateValue}`}
+                                type="button"
+                                onClick={() => openBooking(booking)}
+                                title={getBookingTooltip(booking)}
+                                className="min-h-9 truncate rounded-md border px-3 py-2 text-left text-sm font-semibold"
+                                style={{
+                                  backgroundColor: tone.background,
+                                  borderColor: tone.accent,
+                                  color: tone.text
+                                }}
+                              >
+                                {getGuestDisplayName(booking.guestName)}
+                              </button>
+                            );
+                          })}
                           {dayJobs.map((job) => renderCleaningChip(job, "regular"))}
-                          {arrivals.map((booking) => renderBookingBoundary(booking, "arrival"))}
-                          {occupied.length > 0 && arrivals.length === 0 && departures.length === 0 ? (
-                            <p className="rounded-md bg-brand-muted px-3 py-2 text-sm text-stone-600">
-                              {getOccupiedPropertySummary(occupied)}
-                            </p>
-                          ) : null}
                         </div>
                       ) : null}
                     </div>

@@ -10,10 +10,9 @@ export type StayCalendarSegment = {
   propertyId: string;
   weekStart: string;
   startDate: string;
-  endDateExclusive: string;
-  startColumn: number;
-  endColumn: number;
-  lane: number;
+  endDate: string;
+  startHalfColumn: number;
+  endHalfColumn: number;
   startsAtBookingStart: boolean;
   endsAtBookingEnd: boolean;
   continuesBefore: boolean;
@@ -23,7 +22,6 @@ export type StayCalendarSegment = {
 export type StayCalendarWeek = {
   weekStart: string;
   segments: StayCalendarSegment[];
-  laneCount: number;
 };
 
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
@@ -60,20 +58,8 @@ function compareCalendarDates(left: Date, right: Date) {
   return dayNumber(left) - dayNumber(right);
 }
 
-function maxCalendarDate(left: Date, right: Date) {
-  return compareCalendarDates(left, right) >= 0 ? left : right;
-}
-
-function minCalendarDate(left: Date, right: Date) {
-  return compareCalendarDates(left, right) <= 0 ? left : right;
-}
-
-function isSameCalendarDate(left: Date, right: Date) {
-  return compareCalendarDates(left, right) === 0;
-}
-
-function getStartColumn(date: Date, weekStart: Date) {
-  return compareCalendarDates(date, weekStart) + 1;
+function getMiddayGridLine(date: Date, weekStart: Date) {
+  return compareCalendarDates(date, weekStart) * 2 + 2;
 }
 
 export function buildStayCalendarWeeks(args: {
@@ -83,67 +69,63 @@ export function buildStayCalendarWeeks(args: {
   const weeks = args.weekStarts.map((weekStartValue) => ({
     weekStart: weekStartValue,
     weekStartDate: parseCalendarDate(weekStartValue),
-    segmentDrafts: [] as Omit<StayCalendarSegment, "lane">[]
+    segments: [] as StayCalendarSegment[]
   }));
 
   for (const booking of args.bookings) {
     const bookingStart = parseCalendarDate(booking.arrivalDate);
-    const bookingEndExclusive = parseCalendarDate(booking.departureDate);
+    const bookingEnd = parseCalendarDate(booking.departureDate);
 
-    if (compareCalendarDates(bookingEndExclusive, bookingStart) <= 0) {
+    if (compareCalendarDates(bookingEnd, bookingStart) <= 0) {
       continue;
     }
 
     for (const week of weeks) {
-      const weekEndExclusive = addCalendarDays(week.weekStartDate, 7);
-      const segmentStart = maxCalendarDate(bookingStart, week.weekStartDate);
-      const segmentEndExclusive = minCalendarDate(bookingEndExclusive, weekEndExclusive);
+      const rawStartHalfColumn = getMiddayGridLine(bookingStart, week.weekStartDate);
+      const rawEndHalfColumn = getMiddayGridLine(bookingEnd, week.weekStartDate);
+      const startHalfColumn = Math.max(1, rawStartHalfColumn);
+      const endHalfColumn = Math.min(15, rawEndHalfColumn);
 
-      if (compareCalendarDates(segmentEndExclusive, segmentStart) <= 0) {
+      if (endHalfColumn <= startHalfColumn) {
         continue;
       }
 
-      week.segmentDrafts.push({
+      week.segments.push({
         bookingId: booking.id,
         propertyId: booking.propertyId,
         weekStart: week.weekStart,
-        startDate: toCalendarDateValue(segmentStart),
-        endDateExclusive: toCalendarDateValue(segmentEndExclusive),
-        startColumn: getStartColumn(segmentStart, week.weekStartDate),
-        endColumn: getStartColumn(segmentEndExclusive, week.weekStartDate),
-        startsAtBookingStart: isSameCalendarDate(segmentStart, bookingStart),
-        endsAtBookingEnd: isSameCalendarDate(segmentEndExclusive, bookingEndExclusive),
-        continuesBefore: compareCalendarDates(segmentStart, bookingStart) > 0,
-        continuesAfter: compareCalendarDates(segmentEndExclusive, bookingEndExclusive) < 0
+        startDate: toCalendarDateValue(bookingStart),
+        endDate: toCalendarDateValue(bookingEnd),
+        startHalfColumn,
+        endHalfColumn,
+        startsAtBookingStart: rawStartHalfColumn >= 1 && rawStartHalfColumn <= 15,
+        endsAtBookingEnd: rawEndHalfColumn >= 1 && rawEndHalfColumn <= 15,
+        continuesBefore: rawStartHalfColumn < 1,
+        continuesAfter: rawEndHalfColumn > 15
       });
     }
   }
 
   return weeks.map((week) => {
-    const sortedSegments = [...week.segmentDrafts].sort((left, right) => {
-      if (left.startColumn !== right.startColumn) {
-        return left.startColumn - right.startColumn;
+    const segments = [...week.segments].sort((left, right) => {
+      if (left.propertyId !== right.propertyId) {
+        return left.propertyId.localeCompare(right.propertyId);
       }
 
-      if (left.endColumn !== right.endColumn) {
-        return right.endColumn - left.endColumn;
+      if (left.startHalfColumn !== right.startHalfColumn) {
+        return left.startHalfColumn - right.startHalfColumn;
+      }
+
+      if (left.endHalfColumn !== right.endHalfColumn) {
+        return right.endHalfColumn - left.endHalfColumn;
       }
 
       return left.bookingId.localeCompare(right.bookingId);
     });
-    const laneEndColumns: number[] = [];
-    const segments = sortedSegments.map((segment) => {
-      const openLane = laneEndColumns.findIndex((endColumn) => endColumn < segment.startColumn);
-      const lane = openLane === -1 ? laneEndColumns.length : openLane;
-      laneEndColumns[lane] = segment.endColumn;
-
-      return { ...segment, lane };
-    });
 
     return {
       weekStart: week.weekStart,
-      segments,
-      laneCount: laneEndColumns.length
+      segments
     };
   });
 }

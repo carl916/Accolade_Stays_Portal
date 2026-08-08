@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addCalendarDays, buildStayCalendarWeeks, parseCalendarDate, toCalendarDateValue } from "./stay-segments";
 
 describe("stay calendar segments", () => {
-  it("keeps checkout day as the exclusive end of a one-night stay", () => {
+  it("renders a one-night stay from arrival midday to checkout midday", () => {
     const [week] = buildStayCalendarWeeks({
       weekStarts: ["2026-08-10"],
       bookings: [
@@ -18,8 +18,8 @@ describe("stay calendar segments", () => {
     expect(week.segments).toMatchObject([
       {
         bookingId: "booking-1",
-        startColumn: 1,
-        endColumn: 2,
+        startHalfColumn: 2,
+        endHalfColumn: 4,
         startsAtBookingStart: true,
         endsAtBookingEnd: true
       }
@@ -41,8 +41,8 @@ describe("stay calendar segments", () => {
 
     expect(weeks[0].segments).toMatchObject([
       {
-        startColumn: 6,
-        endColumn: 8,
+        startHalfColumn: 12,
+        endHalfColumn: 15,
         startsAtBookingStart: true,
         endsAtBookingEnd: false,
         continuesAfter: true
@@ -50,8 +50,8 @@ describe("stay calendar segments", () => {
     ]);
     expect(weeks[1].segments).toMatchObject([
       {
-        startColumn: 1,
-        endColumn: 3,
+        startHalfColumn: 1,
+        endHalfColumn: 6,
         startsAtBookingStart: false,
         endsAtBookingEnd: true,
         continuesBefore: true
@@ -74,8 +74,8 @@ describe("stay calendar segments", () => {
 
     expect(week.segments).toMatchObject([
       {
-        startColumn: 1,
-        endColumn: 3,
+        startHalfColumn: 1,
+        endHalfColumn: 6,
         startsAtBookingStart: false,
         endsAtBookingEnd: true,
         continuesBefore: true
@@ -83,7 +83,7 @@ describe("stay calendar segments", () => {
     ]);
   });
 
-  it("does not visually merge same-day checkout and check-in bookings into one lane", () => {
+  it("meets same-day checkout and check-in bookings at the date midpoint", () => {
     const [week] = buildStayCalendarWeeks({
       weekStarts: ["2026-08-10"],
       bookings: [
@@ -103,8 +103,8 @@ describe("stay calendar segments", () => {
     });
 
     expect(week.segments).toHaveLength(2);
-    expect(week.segments[0]).toMatchObject({ bookingId: "booking-a", startColumn: 1, endColumn: 4, lane: 0 });
-    expect(week.segments[1]).toMatchObject({ bookingId: "booking-b", startColumn: 4, endColumn: 7, lane: 1 });
+    expect(week.segments[0]).toMatchObject({ bookingId: "booking-a", startHalfColumn: 2, endHalfColumn: 8 });
+    expect(week.segments[1]).toMatchObject({ bookingId: "booking-b", startHalfColumn: 8, endHalfColumn: 14 });
   });
 
   it("formats local calendar dates without UTC timezone shifting", () => {
