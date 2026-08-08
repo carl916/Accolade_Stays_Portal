@@ -38,6 +38,7 @@ import {
   defaultGuestCheckInTime,
   formatBedConfiguration,
   getBedConfigurationAction,
+  getCleaningJobStatusLabel,
   type BedConfiguration,
   type CleaningJobStatus,
   type CleaningType,
@@ -129,6 +130,8 @@ type JobsCalendarClientProps = {
   jobs: CleaningJobCalendarItem[];
   bookings: BookingCalendarItem[];
   initialError?: string;
+  canCreateManualClean: boolean;
+  jobDetailBasePath: "/admin/jobs" | "/manager/jobs";
   initialModal?: {
     isOpen: boolean;
     scheduledDate?: string;
@@ -163,8 +166,8 @@ const cleaningTypeLabels = {
 } satisfies Record<CleaningType, string>;
 
 const statusLabels = {
-  awaiting_approval: "Awaiting approval",
-  awaiting_cleaner_response: "Awaiting cleaner response",
+  awaiting_approval: "Needs review",
+  awaiting_cleaner_response: "Confirmed",
   accepted: "Accepted",
   in_progress: "In progress",
   completed: "Completed",
@@ -226,20 +229,6 @@ function getInitialRequiredConfigurations(property: PropertyOption | null) {
   }
 
   return configurations;
-}
-
-function getBedSetupSummary(property: PropertyOption | null) {
-  if (!property) {
-    return "Choose a property to load the bed setup.";
-  }
-
-  if (property.bedrooms.length === 0) {
-    return "No active bedrooms have been configured.";
-  }
-
-  return property.bedrooms
-    .map((bedroom) => `${bedroom.name}: ${formatBedConfiguration(bedroom.currentConfiguration)}`)
-    .join(" - ");
 }
 
 function getGuestDisplayName(name: string) {
@@ -337,14 +326,22 @@ function getCleaningChipText(job: CleaningJobCalendarItem) {
 
   if (job.status === "completed") {
     const completedAt = formatDateTimeClock(job.completedAt);
-    return completedAt ? `Clean - Completed ${completedAt}` : "Clean - Completed";
+    return completedAt ? `Completed ${completedAt}` : "Completed";
+  }
+
+  if (job.status === "awaiting_approval") {
+    return "Needs review";
+  }
+
+  if (job.status === "awaiting_cleaner_response") {
+    return job.assignedCleanerName ? getFirstName(job.assignedCleanerName) : "Confirmed - Unassigned";
   }
 
   if (job.assignedCleanerName) {
-    return `Clean - ${getFirstName(job.assignedCleanerName)}`;
+    return getFirstName(job.assignedCleanerName);
   }
 
-  return "Clean - Unassigned";
+  return "Unassigned";
 }
 
 function getCleaningChipClasses(job: CleaningJobCalendarItem) {
@@ -383,7 +380,15 @@ function getCleaningChipIcon(job: CleaningJobCalendarItem) {
   return <ListChecks className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />;
 }
 
-export function JobsCalendarClient({ properties, jobs, bookings, initialError, initialModal }: JobsCalendarClientProps) {
+export function JobsCalendarClient({
+  properties,
+  jobs,
+  bookings,
+  initialError,
+  canCreateManualClean,
+  jobDetailBasePath,
+  initialModal
+}: JobsCalendarClientProps) {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
   const [calendarView, setCalendarView] = useState<CalendarView>("month");
   const [propertyFilter, setPropertyFilter] = useState(allPropertiesValue);
@@ -410,7 +415,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [requiredConfigurations, setRequiredConfigurations] = useState<Record<string, BedConfiguration>>({});
-  const [showSetupControls, setShowSetupControls] = useState(false);
+  const [editingBedroomIds, setEditingBedroomIds] = useState<string[]>([]);
   const [showGuestOverride, setShowGuestOverride] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -422,7 +427,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
 
   useEffect(() => {
     setRequiredConfigurations(getInitialRequiredConfigurations(selectedProperty));
-    setShowSetupControls(false);
+    setEditingBedroomIds([]);
     setShowGuestOverride(false);
   }, [selectedProperty]);
 
@@ -609,7 +614,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
 
   function closeAddClean() {
     setAddCleanDraft(null);
-    setShowSetupControls(false);
+    setEditingBedroomIds([]);
     setShowGuestOverride(false);
     setShowInstructions(false);
     setShowNotes(false);
@@ -622,13 +627,24 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     }));
   }
 
+  function toggleBedroomSetupEditor(bedroomId: string) {
+    setEditingBedroomIds((current) =>
+      current.includes(bedroomId) ? current.filter((id) => id !== bedroomId) : [...current, bedroomId]
+    );
+  }
+
+  function resetBedroomSetupChange(bedroom: BedroomOption) {
+    updateRequiredConfiguration(bedroom.id, bedroom.currentConfiguration);
+    setEditingBedroomIds((current) => current.filter((id) => id !== bedroom.id));
+  }
+
   const selectedPropertyHasBedrooms = (selectedProperty?.bedrooms.length ?? 0) > 0;
 
   function renderCleaningChip(job: CleaningJobCalendarItem, size: "compact" | "regular" = "compact") {
     return (
       <Link
         key={job.id}
-        href={`/admin/jobs/${job.id}`}
+        href={`${jobDetailBasePath}/${job.id}`}
         className={`grid min-w-0 gap-0.5 rounded-md border px-2 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${
           size === "regular" ? "py-2" : "py-1.5"
         } ${getCleaningChipClasses(job)}`}
@@ -639,7 +655,14 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
         </span>
         <span className="truncate text-[0.68rem] font-medium opacity-80">
           {job.propertyName}
-          {job.expectedStartTime ? ` - ${formatTime(job.expectedStartTime)}` : ` - ${statusLabels[job.status]}`}
+          {job.expectedStartTime
+            ? ` - ${formatTime(job.expectedStartTime)}`
+            : ` - ${getCleaningJobStatusLabel({
+                status: job.status,
+                assignedCleanerName: job.assignedCleanerName,
+                requiresReview: job.requiresReview,
+                bookingChangeRequiresReview: job.bookingChangeRequiresReview
+              })}`}
         </span>
       </Link>
     );
@@ -649,7 +672,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
     return (
       <Link
         key={job.id}
-        href={`/admin/jobs/${job.id}`}
+        href={`${jobDetailBasePath}/${job.id}`}
         className={`grid gap-2 rounded-md border p-3 text-left shadow-sm transition hover:shadow focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${getCleaningChipClasses(
           job
         )}`}
@@ -662,7 +685,12 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
           {cleaningTypeLabels[job.cleaningType]} - {formatTime(job.expectedStartTime, "Time not set")}
         </span>
         <span className="text-xs opacity-80">
-          {job.assignedCleanerName ?? "Unassigned"} - {statusLabels[job.status]}
+          {getCleaningJobStatusLabel({
+            status: job.status,
+            assignedCleanerName: job.assignedCleanerName,
+            requiresReview: job.requiresReview,
+            bookingChangeRequiresReview: job.bookingChangeRequiresReview
+          })}
         </span>
       </Link>
     );
@@ -765,14 +793,16 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                 ))}
               </select>
             </div>
-            <button
-              type="button"
-              onClick={() => openAddClean()}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Add clean
-            </button>
+            {canCreateManualClean ? (
+              <button
+                type="button"
+                onClick={() => openAddClean()}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Add clean
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -846,11 +876,19 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                             <button
                               key={dateValue}
                               type="button"
-                              onClick={() => openAddClean(dateValue)}
-                              className={`min-h-9 px-2 py-1 text-left text-sm font-semibold transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-inset ${
+                              onClick={() => {
+                                if (canCreateManualClean) {
+                                  openAddClean(dateValue);
+                                }
+                              }}
+                              className={`min-h-9 px-2 py-1 text-left text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-inset ${
                                 isCurrentMonth ? "text-brand-ink" : "text-stone-400"
-                              }`}
-                              aria-label={`Add clean on ${format(day, "d MMMM yyyy")}`}
+                              } ${canCreateManualClean ? "hover:bg-brand-muted" : "cursor-default"}`}
+                              aria-label={
+                                canCreateManualClean
+                                  ? `Add clean on ${format(day, "d MMMM yyyy")}`
+                                  : format(day, "d MMMM yyyy")
+                              }
                             >
                               <span
                                 className={`inline-flex min-h-7 min-w-7 items-center justify-center rounded-md ${
@@ -974,8 +1012,14 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                     <div key={dateValue} className="rounded-lg border border-brand-border bg-white p-3">
                       <button
                         type="button"
-                        onClick={() => openAddClean(dateValue)}
-                        className="text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+                        onClick={() => {
+                          if (canCreateManualClean) {
+                            openAddClean(dateValue);
+                          }
+                        }}
+                        className={`text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 ${
+                          canCreateManualClean ? "" : "cursor-default"
+                        }`}
                       >
                         <span className="block text-sm font-semibold text-brand-ink">{format(day, "EEE d MMM")}</span>
                         <span className="block text-xs text-stone-500">
@@ -1155,7 +1199,116 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                   <BedDouble className="h-4 w-4 text-brand-darkSlate" aria-hidden="true" />
                   Bed setup
                 </div>
-                <p className="text-sm leading-6 text-stone-700">{getBedSetupSummary(selectedProperty)}</p>
+                <p className="text-xs text-stone-500">Snapshotted when the clean is created.</p>
+                {!selectedProperty ? (
+                  <p className="text-sm leading-6 text-stone-700">Choose a property to load the bed setup.</p>
+                ) : !selectedPropertyHasBedrooms ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                    Add at least one active bedroom before creating a clean for this property.
+                  </p>
+                ) : (
+                  <div className="grid gap-1.5">
+                    {selectedProperty.bedrooms.map((bedroom) => {
+                      const requiredConfiguration = requiredConfigurations[bedroom.id] ?? bedroom.currentConfiguration;
+                      const hasChanged = requiredConfiguration !== bedroom.currentConfiguration;
+                      const isEditing = editingBedroomIds.includes(bedroom.id);
+
+                      if (isEditing) {
+                        return (
+                          <div key={bedroom.id} className="grid gap-2 rounded-md border border-brand-border bg-white p-3">
+                            <div>
+                              <p className="text-sm font-semibold text-brand-ink">{bedroom.name}</p>
+                              <p className="text-xs text-stone-600">
+                                Current: {formatBedConfiguration(bedroom.currentConfiguration)}
+                              </p>
+                            </div>
+                            <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+                              Required setup
+                              <select
+                                value={requiredConfiguration}
+                                onChange={(event) => {
+                                  const nextConfiguration = event.target.value as BedConfiguration;
+                                  updateRequiredConfiguration(bedroom.id, nextConfiguration);
+
+                                  if (nextConfiguration === bedroom.currentConfiguration) {
+                                    setEditingBedroomIds((current) => current.filter((id) => id !== bedroom.id));
+                                  }
+                                }}
+                                className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+                              >
+                                {bedroom.permittedConfigurations.map((configuration) => (
+                                  <option key={configuration} value={configuration}>
+                                    {formatBedConfiguration(configuration)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {hasChanged ? (
+                              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2">
+                                <p className="text-sm font-semibold text-amber-950">
+                                  {formatBedConfiguration(bedroom.currentConfiguration)} -&gt;{" "}
+                                  {formatBedConfiguration(requiredConfiguration)}
+                                </p>
+                                <p className="text-sm font-semibold text-amber-900">
+                                  {getBedConfigurationAction({
+                                    currentConfiguration: bedroom.currentConfiguration,
+                                    requiredConfiguration
+                                  })}
+                                </p>
+                              </div>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => resetBedroomSetupChange(bedroom)}
+                              className="justify-self-start text-sm font-semibold text-brand-moss transition hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+                            >
+                              Cancel change
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={bedroom.id}
+                          className={`grid gap-1 rounded-md border px-3 py-2 ${
+                            hasChanged ? "border-amber-300 bg-amber-50" : "border-brand-border bg-white"
+                          }`}
+                        >
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3">
+                            <span className="truncate text-sm font-semibold text-brand-ink">{bedroom.name}</span>
+                            <span
+                              className={`text-sm font-semibold ${
+                                hasChanged ? "text-amber-950" : "text-stone-700"
+                              }`}
+                            >
+                              {hasChanged
+                                ? `${formatBedConfiguration(bedroom.currentConfiguration)} -> ${formatBedConfiguration(
+                                    requiredConfiguration
+                                  )}`
+                                : formatBedConfiguration(bedroom.currentConfiguration)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleBedroomSetupEditor(bedroom.id)}
+                              className="text-sm font-semibold text-brand-moss transition hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+                            >
+                              {hasChanged ? "Edit" : "Change"}
+                            </button>
+                          </div>
+                          {hasChanged ? (
+                            <p className="text-sm font-semibold text-amber-900">
+                              {getBedConfigurationAction({
+                                currentConfiguration: bedroom.currentConfiguration,
+                                requiredConfiguration
+                              })}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1168,7 +1321,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
               />
             ))}
 
-            <details className="rounded-md border border-brand-border bg-white" open={showSetupControls || showGuestOverride || showInstructions || showNotes}>
+            <details className="rounded-md border border-brand-border bg-white" open={showGuestOverride || showInstructions || showNotes}>
               <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-semibold text-brand-ink">
                 <Settings2 className="h-4 w-4 text-brand-darkSlate" aria-hidden="true" />
                 Advanced options
@@ -1197,73 +1350,6 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                         className="min-h-11 rounded-md border border-brand-border px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
                       />
                     </label>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-2">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-brand-ink">Bed configuration changes</p>
-                      <p className="text-sm text-stone-600">Bedroom setup is snapshotted when the clean is created.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowSetupControls((value) => !value)}
-                      disabled={!selectedPropertyHasBedrooms}
-                      className="inline-flex min-h-11 items-center justify-center rounded-md border border-brand-slate px-4 text-sm font-semibold text-brand-ink transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {showSetupControls ? "Hide setup" : "Change setup"}
-                    </button>
-                  </div>
-                  {!selectedPropertyHasBedrooms && selectedProperty ? (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                      Add at least one active bedroom before creating a clean for this property.
-                    </p>
-                  ) : null}
-                  {showSetupControls ? (
-                    <div className="grid gap-2">
-                      {selectedProperty?.bedrooms.map((bedroom) => {
-                        const requiredConfiguration =
-                          requiredConfigurations[bedroom.id] ?? bedroom.currentConfiguration;
-                        const hasChanged = requiredConfiguration !== bedroom.currentConfiguration;
-
-                        return (
-                          <div key={bedroom.id} className="grid gap-2 rounded-md border border-brand-border p-3">
-                            <div>
-                              <p className="text-sm font-semibold text-brand-ink">{bedroom.name}</p>
-                              <p className="text-sm text-stone-600">
-                                {hasChanged
-                                  ? `${formatBedConfiguration(bedroom.currentConfiguration)} -> ${formatBedConfiguration(requiredConfiguration)}`
-                                  : `Current: ${formatBedConfiguration(bedroom.currentConfiguration)}`}
-                              </p>
-                            </div>
-                            <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-                              Required setup
-                              <select
-                                value={requiredConfiguration}
-                                onChange={(event) =>
-                                  updateRequiredConfiguration(bedroom.id, event.target.value as BedConfiguration)
-                                }
-                                className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-                              >
-                                {bedroom.permittedConfigurations.map((configuration) => (
-                                  <option key={configuration} value={configuration}>
-                                    {formatBedConfiguration(configuration)}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <p className="rounded-md bg-brand-muted px-3 py-2 text-sm font-semibold text-brand-darkSlate">
-                              Action:{" "}
-                              {getBedConfigurationAction({
-                                currentConfiguration: bedroom.currentConfiguration,
-                                requiredConfiguration
-                              })}
-                            </p>
-                          </div>
-                        );
-                      })}
-                    </div>
                   ) : null}
                 </div>
 
@@ -1374,7 +1460,7 @@ export function JobsCalendarClient({ properties, jobs, bookings, initialError, i
                   {selectedBooking.linkedJobs.map((job) => (
                     <Link
                       key={job.id}
-                      href={`/admin/jobs/${job.id}`}
+                      href={`${jobDetailBasePath}/${job.id}`}
                       className="rounded-md bg-brand-muted px-3 py-2 text-sm font-semibold text-brand-ink"
                     >
                       {cleaningTypeLabels[job.cleaningType]} - {formatDate(job.scheduledDate)} - {statusLabels[job.status]}

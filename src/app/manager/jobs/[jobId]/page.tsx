@@ -53,7 +53,7 @@ type AuditEventRow = Pick<
   actor: Pick<Database["public"]["Tables"]["profiles"]["Row"], "full_name"> | null;
 };
 
-type JobDetailPageProps = {
+type ManagerJobPageProps = {
   params: Promise<{ jobId: string }>;
   searchParams?: Promise<{
     error?: string;
@@ -75,8 +75,8 @@ function getPermittedConfigurations(bedroom: JobBedroomRow) {
   return [...new Set(combined)];
 }
 
-export default async function JobDetailPage({ params, searchParams }: JobDetailPageProps) {
-  const profile = await requireRole(["administrator"]);
+export default async function ManagerJobPage({ params, searchParams }: ManagerJobPageProps) {
+  const profile = await requireRole(["cleaning_manager"]);
   const { jobId } = await params;
   const resolvedSearchParams = await searchParams;
   const supabase = await createSupabaseServerClient();
@@ -92,17 +92,6 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
   if (!job) {
     notFound();
   }
-
-  const nextBookingQuery = supabase
-    .from("smoobu_bookings")
-    .select("guest_name,check_in_time")
-    .eq("property_id", job.property_id)
-    .eq("arrival_date", job.scheduled_date)
-    .eq("is_cancelled", false)
-    .is("source_deleted_at", null)
-    .order("check_in_time", { ascending: true })
-    .limit(1)
-    .maybeSingle();
 
   const [
     { data: bedroomData },
@@ -133,7 +122,16 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
       .eq("cleaning_job_id", job.id)
       .order("created_at", { ascending: false })
       .limit(20),
-    nextBookingQuery
+    supabase
+      .from("smoobu_bookings")
+      .select("guest_name,check_in_time")
+      .eq("property_id", job.property_id)
+      .eq("arrival_date", job.scheduled_date)
+      .eq("is_cancelled", false)
+      .is("source_deleted_at", null)
+      .order("check_in_time", { ascending: true })
+      .limit(1)
+      .maybeSingle()
   ]);
   const bedrooms = (bedroomData ?? []) as JobBedroomRow[];
   const cleaners = (cleanerData ?? []) as CleanerRow[];
@@ -193,9 +191,9 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
       comments={reviewComments}
       auditEvents={reviewAuditEvents}
       currentRole={profile.role}
-      backHref="/admin/jobs"
-      backLabel="Cleaning jobs"
-      returnPath={`/admin/jobs/${job.id}`}
+      backHref="/manager"
+      backLabel="Work queue"
+      returnPath={`/manager/jobs/${job.id}`}
       error={resolvedSearchParams?.error}
       success={resolvedSearchParams?.success}
     />

@@ -418,6 +418,46 @@ export type Database = {
           }
         ];
       };
+      cleaning_job_comments: {
+        Row: {
+          id: string;
+          cleaning_job_id: string;
+          author_id: string | null;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          cleaning_job_id: string;
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          cleaning_job_id?: string;
+          author_id?: string | null;
+          body?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "cleaning_job_comments_author_id_fkey";
+            columns: ["author_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cleaning_job_comments_cleaning_job_id_fkey";
+            columns: ["cleaning_job_id"];
+            referencedRelation: "cleaning_jobs";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       cleaning_linen_records: {
         Row: {
           id: string;

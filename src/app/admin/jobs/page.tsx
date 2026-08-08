@@ -265,6 +265,8 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
 
       <JobsCalendarClient
         initialError={getRecoveredError(resolvedSearchParams)}
+        canCreateManualClean={profile.role === "administrator"}
+        jobDetailBasePath={profile.role === "administrator" ? "/admin/jobs" : "/manager/jobs"}
         initialModal={{
           isOpen: resolvedSearchParams?.addClean === "1" || Boolean(getRecoveredError(resolvedSearchParams)),
           scheduledDate: getSafeDateParam(resolvedSearchParams?.scheduledDate),

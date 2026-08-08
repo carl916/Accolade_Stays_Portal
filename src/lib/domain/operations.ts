@@ -138,6 +138,45 @@ export function canTransitionCleaningJobStatus(from: CleaningJobStatus, to: Clea
   return (cleaningJobStatusTransitions[from] as readonly CleaningJobStatus[]).includes(to);
 }
 
+export function getCleaningJobStatusLabel(args: {
+  status: CleaningJobStatus;
+  assignedCleanerName?: string | null;
+  requiresReview?: boolean;
+  bookingChangeRequiresReview?: boolean;
+}) {
+  if (args.status === "awaiting_approval") {
+    return "Needs review";
+  }
+
+  if (args.status === "awaiting_cleaner_response") {
+    return args.assignedCleanerName ? `Assigned - ${args.assignedCleanerName}` : "Confirmed - Unassigned";
+  }
+
+  if (args.status === "accepted") {
+    return args.assignedCleanerName ? `Accepted - ${args.assignedCleanerName}` : "Accepted";
+  }
+
+  if (args.status === "requires_review" || args.requiresReview || args.bookingChangeRequiresReview) {
+    return "Requires review";
+  }
+
+  const labels = {
+    in_progress: "In progress",
+    completed: "Completed",
+    cancelled: "Cancelled"
+  } satisfies Partial<Record<CleaningJobStatus, string>>;
+
+  return labels[args.status] ?? args.status;
+}
+
+export function isCleaningJobNeedsManagerReview(args: {
+  status: CleaningJobStatus;
+  requiresReview?: boolean;
+  bookingChangeRequiresReview?: boolean;
+}) {
+  return args.status === "awaiting_approval" || args.status === "requires_review" || Boolean(args.requiresReview) || Boolean(args.bookingChangeRequiresReview);
+}
+
 export function getBedConfigurationAction(args: {
   currentConfiguration: BedConfiguration;
   requiredConfiguration: BedConfiguration;

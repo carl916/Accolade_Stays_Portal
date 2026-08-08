@@ -14,10 +14,12 @@ import {
   formatCleaningDurationForPropertyDetail,
   formatCleaningDurationOption,
   getBedConfigurationAction,
+  getCleaningJobStatusLabel,
   getDefaultGuestArrivalDeadlineIso,
   getRoleHomePath,
   initialLinenItemNames,
   initialPropertyNames,
+  isCleaningJobNeedsManagerReview,
   isRoleAllowed,
   requiresReviewForFinalBedConfiguration,
   supportedCleaningDurationSchema,
@@ -73,6 +75,19 @@ describe("operations domain rules", () => {
 
   it("allows the normal cleaner progression from accepted to in progress", () => {
     expect(canTransitionCleaningJobStatus("accepted", "in_progress")).toBe(true);
+  });
+
+  it("uses operational cleaning manager status labels", () => {
+    expect(getCleaningJobStatusLabel({ status: "awaiting_approval" })).toBe("Needs review");
+    expect(getCleaningJobStatusLabel({ status: "awaiting_cleaner_response" })).toBe("Confirmed - Unassigned");
+    expect(
+      getCleaningJobStatusLabel({
+        status: "awaiting_cleaner_response",
+        assignedCleanerName: "Sarah Jones"
+      })
+    ).toBe("Assigned - Sarah Jones");
+    expect(isCleaningJobNeedsManagerReview({ status: "awaiting_approval" })).toBe(true);
+    expect(isCleaningJobNeedsManagerReview({ status: "awaiting_cleaner_response" })).toBe(false);
   });
 
   it("requires review when final bed configuration differs from required configuration", () => {

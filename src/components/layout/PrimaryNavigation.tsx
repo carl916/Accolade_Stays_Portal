@@ -111,6 +111,11 @@ export function PrimaryNavigation({ profile }: PrimaryNavigationProps) {
             href: "/admin/properties",
             label: "Properties",
             isActive: isActivePath(pathname, "/admin/properties")
+          },
+          {
+            href: "/admin/users",
+            label: "Users",
+            isActive: isActivePath(pathname, "/admin/users")
           }
         ]
       : [])
