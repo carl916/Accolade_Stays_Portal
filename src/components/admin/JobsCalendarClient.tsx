@@ -27,6 +27,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createCleaningJob } from "@/lib/admin/job-actions";
+import { getCleanAddAffordanceVariant, type CleanAddAffordanceVariant } from "@/lib/calendar/clean-add-affordance";
 import {
   addCalendarDays,
   buildStayCalendarWeeks,
@@ -411,6 +412,7 @@ export function JobsCalendarClient({
     };
   });
   const [selectedBooking, setSelectedBooking] = useState<BookingCalendarItem | null>(null);
+  const [activeCleanAddDate, setActiveCleanAddDate] = useState<string | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -430,6 +432,28 @@ export function JobsCalendarClient({
     setEditingBedroomIds([]);
     setShowGuestOverride(false);
   }, [selectedProperty]);
+
+  useEffect(() => {
+    if (!activeCleanAddDate) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+
+      if (!target?.closest("[data-clean-add-cell='true']")) {
+        setActiveCleanAddDate(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [activeCleanAddDate]);
+
+  useEffect(() => {
+    setActiveCleanAddDate(null);
+  }, [calendarMonth, calendarView, propertyFilter]);
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(calendarMonth), { weekStartsOn: 1 });
@@ -640,6 +664,70 @@ export function JobsCalendarClient({
 
   const selectedPropertyHasBedrooms = (selectedProperty?.bedrooms.length ?? 0) > 0;
 
+  function revealCleanAddDate(dateValue: string) {
+    if (canCreateManualClean) {
+      setActiveCleanAddDate(dateValue);
+    }
+  }
+
+  function hideCleanAddDate(dateValue: string) {
+    setActiveCleanAddDate((current) => (current === dateValue ? null : current));
+  }
+
+  function openAddCleanForDate(dateValue: string) {
+    openAddClean(dateValue);
+    setActiveCleanAddDate(null);
+  }
+
+  function renderCleanAddAffordance(args: {
+    dateValue: string;
+    day: Date;
+    variant: CleanAddAffordanceVariant;
+  }) {
+    if (!canCreateManualClean) {
+      return null;
+    }
+
+    const isActive = activeCleanAddDate === args.dateValue;
+    const visibilityClass = isActive
+      ? "pointer-events-auto opacity-100"
+      : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100";
+    const label = `Add clean for ${format(args.day, "d MMMM")}`;
+
+    if (args.variant === "compact") {
+      return (
+        <button
+          type="button"
+          tabIndex={isActive ? 0 : -1}
+          onClick={(event) => {
+            event.stopPropagation();
+            openAddCleanForDate(args.dateValue);
+          }}
+          aria-label={label}
+          className={`absolute right-1.5 top-1.5 z-20 inline-flex h-8 w-8 items-center justify-center rounded-md border border-brand-slate bg-white text-brand-primary shadow-sm transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${visibilityClass}`}
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        tabIndex={isActive ? 0 : -1}
+        onClick={(event) => {
+          event.stopPropagation();
+          openAddCleanForDate(args.dateValue);
+        }}
+        aria-label={label}
+        className={`absolute bottom-1.5 left-1.5 right-1.5 z-20 flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-dashed border-brand-slate bg-white/90 px-2 text-xs font-semibold text-brand-primary shadow-sm transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-1 ${visibilityClass}`}
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+        Add clean
+      </button>
+    );
+  }
+
   function renderCleaningChip(job: CleaningJobCalendarItem, size: "compact" | "regular" = "compact") {
     return (
       <Link
@@ -833,6 +921,11 @@ export function JobsCalendarClient({
                   const weekStartValue = toDateInputValue(week[0]);
                   const stayWeek = stayWeeksByStart.get(weekStartValue);
                   const weekHasJobs = week.some((day) => (jobsByDate.get(toDateInputValue(day)) ?? []).length > 0);
+                  const weekMaxCleanCount = Math.max(
+                    0,
+                    ...week.map((day) => (jobsByDate.get(toDateInputValue(day)) ?? []).length)
+                  );
+                  const shouldShowCleanRow = weekHasJobs || canCreateManualClean;
 
                   return (
                     <div
@@ -968,7 +1061,7 @@ export function JobsCalendarClient({
                         )}
                       </div>
 
-                      {weekHasJobs ? (
+                      {shouldShowCleanRow ? (
                         <div
                           className="relative grid border-t border-brand-border/70 bg-white/90"
                           style={{ gridTemplateColumns: calendarHalfDayGridTemplate }}
@@ -979,14 +1072,65 @@ export function JobsCalendarClient({
                           {week.map((day, index) => {
                             const dateValue = toDateInputValue(day);
                             const dayJobs = jobsByDate.get(dateValue) ?? [];
+                            const addAffordanceVariant = getCleanAddAffordanceVariant({
+                              dayCleanCount: dayJobs.length,
+                              weekMaxCleanCount
+                            });
 
                             return (
                               <div
                                 key={dateValue}
-                                className="grid min-h-12 gap-1 p-1.5"
+                                data-clean-add-cell="true"
+                                tabIndex={canCreateManualClean ? 0 : undefined}
+                                onPointerEnter={(event) => {
+                                  if (event.pointerType === "mouse") {
+                                    revealCleanAddDate(dateValue);
+                                  }
+                                }}
+                                onPointerLeave={(event) => {
+                                  if (event.pointerType === "mouse") {
+                                    hideCleanAddDate(dateValue);
+                                  }
+                                }}
+                                onFocus={() => revealCleanAddDate(dateValue)}
+                                onBlur={(event) => {
+                                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                                    hideCleanAddDate(dateValue);
+                                  }
+                                }}
+                                onClick={(event) => {
+                                  if ((event.target as HTMLElement).closest("a,button")) {
+                                    return;
+                                  }
+
+                                  revealCleanAddDate(dateValue);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.target !== event.currentTarget) {
+                                    return;
+                                  }
+
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+
+                                    if (activeCleanAddDate === dateValue) {
+                                      openAddCleanForDate(dateValue);
+                                    } else {
+                                      revealCleanAddDate(dateValue);
+                                    }
+                                  }
+                                }}
+                                className={`group relative grid min-h-12 gap-1 p-1.5 focus:outline-none ${
+                                  canCreateManualClean ? "cursor-pointer focus:ring-2 focus:ring-brand-focus focus:ring-inset" : ""
+                                }`}
                                 style={{ gridColumn: `${index * 2 + 2} / span 2` }}
                               >
                                 {dayJobs.map((job) => renderCleaningChip(job))}
+                                {renderCleanAddAffordance({
+                                  dateValue,
+                                  day,
+                                  variant: addAffordanceVariant
+                                })}
                               </div>
                             );
                           })}
@@ -1007,6 +1151,10 @@ export function JobsCalendarClient({
                   const dayBookings = (occupancyByDate.get(dateValue) ?? []).filter(
                     (booking) => booking.arrivalDate === dateValue || booking.departureDate === dateValue
                   );
+                  const addAffordanceVariant = getCleanAddAffordanceVariant({
+                    dayCleanCount: dayJobs.length,
+                    weekMaxCleanCount: dayJobs.length
+                  });
 
                   return (
                     <div key={dateValue} className="rounded-lg border border-brand-border bg-white p-3">
@@ -1014,7 +1162,7 @@ export function JobsCalendarClient({
                         type="button"
                         onClick={() => {
                           if (canCreateManualClean) {
-                            openAddClean(dateValue);
+                            revealCleanAddDate(dateValue);
                           }
                         }}
                         className={`text-left focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2 ${
@@ -1031,7 +1179,7 @@ export function JobsCalendarClient({
                         </span>
                       </button>
 
-                      {dayJobs.length > 0 || dayBookings.length > 0 ? (
+                      {dayBookings.length > 0 ? (
                         <div className="mt-3 grid gap-2">
                           {dayBookings.map((booking) => {
                             const tone = propertyTonesById.get(booking.propertyId) ?? propertyTonePalette[0];
@@ -1053,7 +1201,51 @@ export function JobsCalendarClient({
                               </button>
                             );
                           })}
+                        </div>
+                      ) : null}
+
+                      {dayJobs.length > 0 || canCreateManualClean ? (
+                        <div
+                          data-clean-add-cell="true"
+                          tabIndex={canCreateManualClean ? 0 : undefined}
+                          onFocus={() => revealCleanAddDate(dateValue)}
+                          onBlur={(event) => {
+                            if (!event.currentTarget.contains(event.relatedTarget)) {
+                              hideCleanAddDate(dateValue);
+                            }
+                          }}
+                          onClick={(event) => {
+                            if ((event.target as HTMLElement).closest("a,button")) {
+                              return;
+                            }
+
+                            revealCleanAddDate(dateValue);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.target !== event.currentTarget) {
+                              return;
+                            }
+
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+
+                              if (activeCleanAddDate === dateValue) {
+                                openAddCleanForDate(dateValue);
+                              } else {
+                                revealCleanAddDate(dateValue);
+                              }
+                            }
+                          }}
+                          className={`group relative mt-3 grid min-h-12 gap-2 rounded-md border border-transparent focus:outline-none ${
+                            canCreateManualClean ? "cursor-pointer focus:ring-2 focus:ring-brand-focus focus:ring-inset" : ""
+                          }`}
+                        >
                           {dayJobs.map((job) => renderCleaningChip(job, "regular"))}
+                          {renderCleanAddAffordance({
+                            dateValue,
+                            day,
+                            variant: addAffordanceVariant
+                          })}
                         </div>
                       ) : null}
                     </div>
