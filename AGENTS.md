@@ -233,6 +233,8 @@ Minimise typing.
 
 Prefer buttons, selectors, presets and plus/minus quantity controls.
 
+Keep screens concise by default. Avoid showing repeated input controls and action buttons until they are needed. Prefer compact summary rows with a single add/edit affordance that reveals the necessary controls, plus clear save and cancel actions.
+
 Every page must clearly show:
 
 - property

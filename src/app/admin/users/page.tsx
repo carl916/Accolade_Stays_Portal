@@ -1,11 +1,7 @@
-import { UserPlus, Users } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
-import { inviteUser, updateUserProfile } from "@/lib/admin/user-actions";
-import { getCleanerTypeLabel, type AppRole, type CleanerType } from "@/lib/domain/operations";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
-import { FormSubmitButton } from "@/components/admin/FormSubmitButton";
-import { UserRoleCleanerTypeFields } from "@/components/admin/UserRoleCleanerTypeFields";
+import { UserAdminPanel, type UserAdminProfile } from "@/components/admin/UserAdminPanel";
 
 type ProfileRow = Pick<
   Database["public"]["Tables"]["profiles"]["Row"],
@@ -19,16 +15,6 @@ type AdminUsersPageProps = {
     inviteLink?: string;
   }>;
 };
-
-const roleLabels = {
-  administrator: "Administrator",
-  cleaning_manager: "Cleaning Manager",
-  cleaner: "Cleaner"
-} satisfies Record<AppRole, string>;
-
-function formatCleanerType(cleanerType: CleanerType | null) {
-  return cleanerType ? getCleanerTypeLabel(cleanerType) : "-";
-}
 
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   await requireRole(["administrator"]);
@@ -76,94 +62,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
         </p>
       ) : null}
 
-      <form action={inviteUser} className="grid gap-3 rounded-lg border border-brand-border bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <UserPlus className="h-5 w-5 text-brand-moss" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-brand-ink">Invite user</h2>
-        </div>
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_minmax(12rem,0.8fr)_minmax(12rem,0.8fr)_auto] md:items-end">
-          <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-            Name
-            <input
-              name="fullName"
-              placeholder="Sarah & Emma"
-              required
-              className="min-h-11 rounded-md border border-brand-border px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              className="min-h-11 rounded-md border border-brand-border px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-            />
-          </label>
-          <UserRoleCleanerTypeFields roleLabels={roleLabels} defaultRole="cleaner" defaultCleanerType="individual" />
-          <FormSubmitButton pendingLabel="Inviting..." className="md:w-auto">
-            Invite
-          </FormSubmitButton>
-        </div>
-      </form>
-
-      <section className="grid gap-3 rounded-lg border border-brand-border bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-brand-moss" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-brand-ink">User access</h2>
-        </div>
-        <div className="grid gap-2">
-          {profiles.map((profile) => (
-            <form
-              key={profile.id}
-              action={updateUserProfile}
-              className="grid gap-3 rounded-md border border-brand-border p-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(11rem,0.65fr)_minmax(11rem,0.65fr)_minmax(9rem,0.5fr)_auto] xl:items-end"
-            >
-              <input type="hidden" name="profileId" value={profile.id} />
-              <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-                Name
-                <input
-                  name="fullName"
-                  defaultValue={profile.full_name}
-                  required
-                  className="min-h-11 rounded-md border border-brand-border px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-                />
-              </label>
-              <div className="grid gap-1.5 text-sm font-medium text-brand-ink">
-                Email
-                <p className="flex min-h-11 items-center truncate rounded-md bg-brand-muted px-3 text-base text-stone-700">
-                  {profile.email ?? "No email recorded"}
-                </p>
-              </div>
-              <UserRoleCleanerTypeFields
-                roleLabels={roleLabels}
-                defaultRole={profile.role}
-                defaultCleanerType={profile.cleaner_type}
-              />
-              <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
-                Status
-                <select
-                  name="isActive"
-                  defaultValue={profile.is_active ? "active" : "inactive"}
-                  className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </label>
-              <FormSubmitButton pendingLabel="Saving..." className="xl:w-auto">
-                Save
-              </FormSubmitButton>
-              <p className="text-xs text-stone-500 xl:col-start-4">
-                Current type: {profile.role === "cleaner" ? formatCleanerType(profile.cleaner_type) : "-"}
-              </p>
-            </form>
-          ))}
-          {profiles.length === 0 ? (
-            <p className="rounded-md bg-brand-muted px-3 py-3 text-sm text-stone-600">No users found.</p>
-          ) : null}
-        </div>
-      </section>
+      <UserAdminPanel profiles={profiles as UserAdminProfile[]} />
     </section>
   );
 }
