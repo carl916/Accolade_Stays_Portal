@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/auth/session";
-import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import { canManageSettings } from "@/lib/domain/operations";
 import { syncSmoobuBookingsNow } from "@/lib/admin/smoobu-actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -214,7 +214,7 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
         <p className="text-sm font-semibold uppercase tracking-normal text-brand-moss">
           {profile.role === "administrator" ? "Administrator" : "Cleaning manager"}
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-brand-ink">Cleaning jobs</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-brand-ink">Calendar</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600">
           Schedule planned cleans from the calendar and review upcoming work across every property.
         </p>
@@ -227,39 +227,34 @@ export default async function AdminJobsPage({ searchParams }: AdminJobsPageProps
       ) : null}
 
       {canManageSmoobu ? (
-        <section className="flex flex-col gap-3 rounded-lg border border-brand-border bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-brand-ink">Smoobu</p>
-            <p className="mt-1 text-sm text-stone-600">
+        <section className="flex items-center justify-between gap-3 rounded-md border border-brand-border/80 bg-white/70 px-3 py-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs text-stone-500">
+              <span className="font-semibold text-stone-600">Smoobu</span>
+              {" - "}
               {latestSyncRun?.last_successful_sync_at
-                ? `Last synced: ${formatUkDateTime(latestSyncRun.last_successful_sync_at)}`
+                ? `Synced ${formatUkDateTime(latestSyncRun.last_successful_sync_at)}`
                 : "No successful sync yet"}
               {" - "}
-              {mappings.filter((mapping) => mapping.is_active).length} properties mapped
-              {unmappedApartmentCount > 0 ? ` - ${unmappedApartmentCount} unmapped apartments` : ""}
+              {mappings.filter((mapping) => mapping.is_active).length} mapped
+              {unmappedApartmentCount > 0 ? ` - ${unmappedApartmentCount} unmapped` : ""}
             </p>
             {latestSyncRun?.error_message || integrationWarning ? (
-              <p className="mt-1 text-sm font-medium text-amber-700">
+              <p className="mt-1 truncate text-xs font-medium text-amber-700">
                 {latestSyncRun?.error_message ?? integrationWarning}
               </p>
             ) : null}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <form action={syncSmoobuBookingsNow}>
-              <button
-                type="submit"
-                className="min-h-11 rounded-md bg-brand-primary px-4 text-sm font-semibold text-brand-primaryForeground transition hover:bg-brand-primaryHover focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-              >
-                Sync now
-              </button>
-            </form>
-            <Link
-              href="/admin/properties"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-brand-slate px-4 text-sm font-semibold text-brand-ink transition hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
+          <form action={syncSmoobuBookingsNow} className="shrink-0">
+            <button
+              type="submit"
+              aria-label="Sync Smoobu now"
+              title="Sync Smoobu now"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border bg-white text-brand-primary transition hover:border-brand-slate hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
             >
-              Settings
-            </Link>
-          </div>
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </form>
         </section>
       ) : null}
 

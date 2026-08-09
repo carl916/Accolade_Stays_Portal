@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/lib/auth/actions";
-import { getRoleHomePath } from "@/lib/domain/operations";
 import type { Database } from "@/lib/supabase/types";
 
 type AuthProfile = Database["public"]["Tables"]["profiles"]["Row"];
@@ -89,18 +88,12 @@ export function PrimaryNavigation({ profile }: PrimaryNavigationProps) {
     );
   }
 
-  const homePath = getRoleHomePath(profile.role);
   const navItems = [
-    {
-      href: homePath,
-      label: "Dashboard",
-      isActive: pathname === homePath
-    },
     ...(profile.role === "administrator" || profile.role === "cleaning_manager"
       ? [
           {
             href: "/admin/jobs",
-            label: "Jobs",
+            label: "Calendar",
             isActive: isActivePath(pathname, "/admin/jobs")
           }
         ]

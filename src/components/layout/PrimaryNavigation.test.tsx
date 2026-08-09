@@ -35,11 +35,12 @@ describe("PrimaryNavigation", () => {
     render(<PrimaryNavigation profile={administratorProfile} />);
 
     const desktopNavigation = screen.getByRole("navigation", { name: "Primary navigation" });
-    const jobsLink = within(desktopNavigation).getByRole("link", { name: "Jobs" });
+    const jobsLink = within(desktopNavigation).getByRole("link", { name: "Calendar" });
 
     expect(jobsLink).toHaveAttribute("aria-current", "page");
     expect(jobsLink).toHaveClass("border-brand-primary");
     expect(jobsLink).toHaveClass("text-brand-primary");
+    expect(within(desktopNavigation).queryByRole("link", { name: "Dashboard" })).not.toBeInTheDocument();
     expect(desktopNavigation).not.toHaveClass("overflow-x-auto");
   });
 

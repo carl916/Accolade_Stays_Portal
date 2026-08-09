@@ -16,16 +16,19 @@ export function UserRoleCleanerTypeFields({
 }: UserRoleCleanerTypeFieldsProps) {
   const [role, setRole] = useState<AppRole>(defaultRole);
   const isCleaner = role === "cleaner";
+  const fieldClass = "grid min-w-0 gap-1.5 text-sm font-medium text-brand-ink";
+  const controlClass =
+    "min-h-11 w-full min-w-0 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30";
 
   return (
     <>
-      <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+      <label className={fieldClass}>
         Role
         <select
           name="role"
           value={role}
           onChange={(event) => setRole(event.target.value as AppRole)}
-          className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+          className={controlClass}
         >
           {appRoles.map((appRole) => (
             <option key={appRole} value={appRole}>
@@ -35,12 +38,12 @@ export function UserRoleCleanerTypeFields({
         </select>
       </label>
       {isCleaner ? (
-        <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+        <label className={fieldClass}>
           Cleaner type
           <select
             name="cleanerType"
             defaultValue={defaultCleanerType ?? "individual"}
-            className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+            className={controlClass}
           >
             {cleanerTypes.map((cleanerType) => (
               <option key={cleanerType} value={cleanerType}>

@@ -1,15 +1,8 @@
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 
 export default async function AdminPage() {
-  const profile = await requireRole(["administrator"]);
+  await requireRole(["administrator"]);
 
-  return (
-    <PlaceholderPage
-      eyebrow="Administrator"
-      title="Admin workspace"
-      description="Create cleaning jobs, manage properties, and review operational exceptions."
-      nextAction={`Signed in as ${profile.full_name}. Manage property and bedroom setup before creating jobs.`}
-    />
-  );
+  redirect("/admin/jobs");
 }

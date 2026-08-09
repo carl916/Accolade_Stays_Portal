@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
 import { appRoleSchema, cleanerTypeSchema } from "@/lib/domain/operations";
+import { getInviteAcceptUrl } from "@/lib/env";
 import { createSupabaseServiceRoleClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -72,6 +73,7 @@ export async function inviteUser(formData: FormData) {
     cleaner_type: getProfileCleanerType(parsed.data.role, parsed.data.cleanerType)
   };
   const inviteOptions = {
+    emailRedirectTo: getInviteAcceptUrl(),
     data: {
       ...inviteMetadata
     }

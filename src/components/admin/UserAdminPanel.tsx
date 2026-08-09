@@ -23,10 +23,18 @@ const roleLabels = {
 } satisfies Record<AppRole, string>;
 
 const actionButtonClass =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-brand-border bg-white px-3 text-sm font-semibold text-brand-ink transition hover:border-brand-slate hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2";
+  "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-brand-border bg-white px-3 text-sm font-semibold text-brand-ink transition hover:border-brand-slate hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2";
 
 const iconButtonClass =
   "inline-flex h-10 w-10 items-center justify-center rounded-md border border-brand-border bg-white text-brand-primary transition hover:border-brand-slate hover:bg-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2";
+
+const formFieldClass = "grid min-w-0 gap-1.5 text-sm font-medium text-brand-ink";
+
+const formControlClass =
+  "min-h-11 w-full min-w-0 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30";
+
+const formActionsClass =
+  "grid min-w-0 grid-cols-2 gap-3 sm:col-span-2 sm:flex sm:justify-end xl:col-span-1 xl:self-end";
 
 function formatCleanerType(cleanerType: CleanerType | null) {
   return cleanerType ? getCleanerTypeLabel(cleanerType) : "-";
@@ -89,36 +97,38 @@ export function UserAdminPanel({ profiles }: UserAdminPanelProps) {
         <form
           id={addFormId}
           action={inviteUser}
-          className="grid gap-3 border-b border-brand-border bg-brand-muted/60 px-4 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(11rem,0.7fr)_minmax(11rem,0.7fr)_auto_auto] md:items-end"
+          className="grid gap-3 border-b border-brand-border bg-brand-muted/60 px-4 py-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(10rem,1fr)_minmax(14rem,1.2fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)_auto]"
         >
-          <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+          <label className={formFieldClass}>
             Name
             <input
               name="fullName"
               required
-              className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+              className={formControlClass}
             />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+          <label className={formFieldClass}>
             Email
             <input
               name="email"
               type="email"
               required
-              className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+              className={formControlClass}
             />
           </label>
           <UserRoleCleanerTypeFields roleLabels={roleLabels} defaultRole="cleaner" defaultCleanerType="individual" />
-          <FormSubmitButton pendingLabel="Inviting..." className="md:w-auto">
-            <span className="inline-flex items-center gap-2">
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Invite
-            </span>
-          </FormSubmitButton>
-          <button type="button" onClick={() => setIsInviteOpen(false)} className={actionButtonClass}>
-            <X className="h-4 w-4" aria-hidden="true" />
-            Cancel
-          </button>
+          <div className={formActionsClass}>
+            <FormSubmitButton pendingLabel="Inviting..." className="w-full sm:w-auto">
+              <span className="inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Invite
+              </span>
+            </FormSubmitButton>
+            <button type="button" onClick={() => setIsInviteOpen(false)} className={`${actionButtonClass} w-full sm:w-auto`}>
+              <X className="h-4 w-4" aria-hidden="true" />
+              Cancel
+            </button>
+          </div>
         </form>
       ) : null}
 
@@ -169,16 +179,16 @@ export function UserAdminPanel({ profiles }: UserAdminPanelProps) {
               {isEditing ? (
                 <form
                   action={updateUserProfile}
-                  className="grid gap-3 border-t border-brand-border bg-brand-muted/60 px-4 py-4 md:grid-cols-[minmax(0,1.2fr)_minmax(11rem,0.7fr)_minmax(11rem,0.7fr)_minmax(9rem,0.6fr)_auto_auto] md:items-end"
+                  className="grid gap-3 border-t border-brand-border bg-brand-muted/60 px-4 py-4 sm:grid-cols-2 sm:items-end xl:grid-cols-[minmax(12rem,1.2fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)_minmax(9rem,0.7fr)_auto]"
                 >
                   <input type="hidden" name="profileId" value={profile.id} />
-                  <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+                  <label className={formFieldClass}>
                     Name
                     <input
                       name="fullName"
                       defaultValue={profile.full_name}
                       required
-                      className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+                      className={formControlClass}
                     />
                   </label>
                   <UserRoleCleanerTypeFields
@@ -186,27 +196,29 @@ export function UserAdminPanel({ profiles }: UserAdminPanelProps) {
                     defaultRole={profile.role}
                     defaultCleanerType={profile.cleaner_type}
                   />
-                  <label className="grid gap-1.5 text-sm font-medium text-brand-ink">
+                  <label className={formFieldClass}>
                     Status
                     <select
                       name="isActive"
                       defaultValue={profile.is_active ? "active" : "inactive"}
-                      className="min-h-11 rounded-md border border-brand-border bg-white px-3 text-base outline-none focus:border-brand-focus focus:ring-2 focus:ring-brand-focus/30"
+                      className={formControlClass}
                     >
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                     </select>
                   </label>
-                  <FormSubmitButton pendingLabel="Saving..." className="md:w-auto">
-                    <span className="inline-flex items-center gap-2">
-                      <Save className="h-4 w-4" aria-hidden="true" />
-                      Save
-                    </span>
-                  </FormSubmitButton>
-                  <button type="button" onClick={() => setEditingProfileId(null)} className={actionButtonClass}>
-                    <X className="h-4 w-4" aria-hidden="true" />
-                    Cancel
-                  </button>
+                  <div className={formActionsClass}>
+                    <FormSubmitButton pendingLabel="Saving..." className="w-full sm:w-auto">
+                      <span className="inline-flex items-center gap-2">
+                        <Save className="h-4 w-4" aria-hidden="true" />
+                        Save
+                      </span>
+                    </FormSubmitButton>
+                    <button type="button" onClick={() => setEditingProfileId(null)} className={`${actionButtonClass} w-full sm:w-auto`}>
+                      <X className="h-4 w-4" aria-hidden="true" />
+                      Cancel
+                    </button>
+                  </div>
                 </form>
               ) : null}
             </div>

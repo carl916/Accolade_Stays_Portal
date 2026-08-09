@@ -1,6 +1,6 @@
 "use client";
 
-import { BedDouble, ChevronRight, Clock, Grid2X2, MapPin, Plus } from "lucide-react";
+import { BedDouble, ChevronRight, Clock, MapPin, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import {
@@ -57,13 +57,6 @@ export function PropertiesListClient({ properties, errorMessage, searchError }: 
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/admin"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md px-2 text-sm font-semibold text-brand-darkSlate underline-offset-4 transition hover:underline focus:outline-none focus:ring-2 focus:ring-brand-focus focus:ring-offset-2"
-            >
-              <Grid2X2 className="h-4 w-4" aria-hidden="true" />
-              Dashboard
-            </Link>
             <button
               type="button"
               onClick={() => setIsAdding(true)}

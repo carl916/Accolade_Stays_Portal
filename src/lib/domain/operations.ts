@@ -98,8 +98,8 @@ export const initialLinenItemNames = [
 ] as const;
 
 export const roleHomePaths = {
-  administrator: "/admin",
-  cleaning_manager: "/manager",
+  administrator: "/admin/jobs",
+  cleaning_manager: "/admin/jobs",
   cleaner: "/cleaner"
 } satisfies Record<AppRole, string>;
 

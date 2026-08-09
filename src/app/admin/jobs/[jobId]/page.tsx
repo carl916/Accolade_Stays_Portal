@@ -214,7 +214,7 @@ export default async function JobDetailPage({ params, searchParams }: JobDetailP
       auditEvents={reviewAuditEvents}
       currentRole={profile.role}
       backHref="/admin/jobs"
-      backLabel="Cleaning jobs"
+      backLabel="Calendar"
       returnPath={`/admin/jobs/${job.id}`}
       error={resolvedSearchParams?.error}
       success={resolvedSearchParams?.success}

@@ -68,9 +68,9 @@ describe("operations domain rules", () => {
 
   });
 
-  it("maps roles to their dashboard routes", () => {
-    expect(getRoleHomePath("administrator")).toBe("/admin");
-    expect(getRoleHomePath("cleaning_manager")).toBe("/manager");
+  it("maps operational roles to their default routes", () => {
+    expect(getRoleHomePath("administrator")).toBe("/admin/jobs");
+    expect(getRoleHomePath("cleaning_manager")).toBe("/admin/jobs");
     expect(getRoleHomePath("cleaner")).toBe("/cleaner");
   });
 
