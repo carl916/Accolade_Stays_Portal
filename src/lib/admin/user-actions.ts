@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { ensureInviteAcceptRedirect } from "@/lib/auth/invite-links";
 import { requireRole } from "@/lib/auth/session";
 import { appRoleSchema, cleanerTypeSchema } from "@/lib/domain/operations";
 import { getInviteAcceptUrl } from "@/lib/env";
@@ -73,7 +74,7 @@ export async function inviteUser(formData: FormData) {
     cleaner_type: getProfileCleanerType(parsed.data.role, parsed.data.cleanerType)
   };
   const inviteOptions = {
-    emailRedirectTo: getInviteAcceptUrl(),
+    redirectTo: getInviteAcceptUrl(),
     data: {
       ...inviteMetadata
     }
@@ -98,7 +99,7 @@ export async function inviteUser(formData: FormData) {
     }
 
     invitedUser = generatedLink.data.user;
-    manualInviteLink = generatedLink.data.properties.action_link;
+    manualInviteLink = ensureInviteAcceptRedirect(generatedLink.data.properties.action_link, getInviteAcceptUrl());
   }
 
   if (!invitedUser) {

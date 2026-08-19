@@ -5,6 +5,8 @@ type AcceptInvitePageProps = {
     code?: string;
     error?: string;
     error_description?: string;
+    token_hash?: string;
+    type?: string;
   }>;
 };
 
@@ -14,6 +16,8 @@ export default async function AcceptInvitePage({ searchParams }: AcceptInvitePag
   return (
     <AcceptInviteForm
       code={params.code}
+      tokenHash={params.token_hash}
+      type={params.type}
       error={params.error_description ?? (params.error ? "This invite link could not be accepted." : undefined)}
     />
   );

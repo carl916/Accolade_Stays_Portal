@@ -10,6 +10,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type AcceptInviteFormProps = {
   code?: string;
+  tokenHash?: string;
+  type?: string;
   error?: string;
 };
 
@@ -34,7 +36,7 @@ function getInviteHashSession() {
   };
 }
 
-export function AcceptInviteForm({ code, error }: AcceptInviteFormProps) {
+export function AcceptInviteForm({ code, tokenHash, type, error }: AcceptInviteFormProps) {
   const [status, setStatus] = useState<InviteStatus>("checking");
   const [message, setMessage] = useState(error ?? "Checking your invite...");
   const [email, setEmail] = useState<string | null>(null);
@@ -69,6 +71,8 @@ export function AcceptInviteForm({ code, error }: AcceptInviteFormProps) {
         ? await supabase.auth.setSession(hashSession)
         : code
           ? await supabase.auth.exchangeCodeForSession(code)
+          : tokenHash && type === "invite"
+            ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
           : {
               data: { user: null },
               error: { message: "This invite link is missing its verification token." }
@@ -98,7 +102,7 @@ export function AcceptInviteForm({ code, error }: AcceptInviteFormProps) {
     return () => {
       isMounted = false;
     };
-  }, [code, error]);
+  }, [code, error, tokenHash, type]);
 
   function onSubmit(values: SetPasswordFormValues) {
     const parsed = setPasswordSchema.safeParse(values);
